@@ -70,7 +70,7 @@ F_CHAMPION = [
     "data.summary.average_stats.{play,win_rate,pick_rate,ban_rate,kda,tier,rank}",
     "data.summary.positions[].name",
     "data.summary.positions[].stats.{role_rate,win_rate}",
-    "data.runes.{primary_page_name,primary_rune_names[],secondary_page_name,secondary_rune_names[],stat_mod_ids[],play,win,pick_rate}",
+    "data.runes.{primary_page_id,primary_page_name,primary_rune_ids[],primary_rune_names[],secondary_page_id,secondary_page_name,secondary_rune_ids[],secondary_rune_names[],stat_mod_ids[],play,win,pick_rate}",
     "data.starter_items.{ids[],ids_names[],pick_rate}",
     "data.core_items.{ids[],ids_names[],pick_rate,play,win}",
     "data.boots.{ids[],ids_names[],pick_rate}",
@@ -106,6 +106,33 @@ def _lane_fields(positions: list[str]) -> list[str]:
         f"data.positions.{p}[].{{champion,tier,rank,rank_prev,win_rate,pick_rate,ban_rate,kda,role_rate}}"
         for p in positions
     ]
+
+
+def versus_row(g: dict, tz: str) -> tuple[dict, str]:
+    """One esports match as a symmetric home / score / away row plus a plain-text line."""
+    home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
+    hs, as_ = g.get("homeScore"), g.get("awayScore")
+    status = g.get("status") or ""
+    home_win = status == "FINISHED" and (hs or 0) > (as_ or 0)
+    away_win = status == "FINISHED" and (as_ or 0) > (hs or 0)
+    if status == "FINISHED":
+        score, score_cls, state = f"{hs} : {as_}", "done", "已结束"
+    elif status in ("RUNNING", "IN_PROGRESS", "LIVE"):
+        score, score_cls, state = f"{hs or 0} : {as_ or 0}", "live", "进行中"
+    else:
+        score, score_cls, state = "VS", "todo", "未开始"
+    h_name = home.get("acronym") or home.get("name") or "待定"
+    a_name = away.get("acronym") or away.get("name") or "待定"
+    when = local_time(g.get("scheduledAt"), tz)
+    bo = f"BO{g.get('numberOfGames')}" if g.get("numberOfGames") else ""
+    stage = str(g.get("name") or "").split(":")[0].strip()
+    row = {
+        "time": when, "league": g.get("league") or "", "stage": stage, "bo": bo, "state": state,
+        "score": score, "score_cls": score_cls,
+        "home": {"name": h_name, "logo": home.get("image_url"), "win": home_win, "lose": away_win},
+        "away": {"name": a_name, "logo": away.get("image_url"), "win": away_win, "lose": home_win},
+    }
+    return row, " ".join(x for x in [when, g.get("league") or "", h_name, score, a_name, bo, state] if x)
 
 
 def rank_tile(queue: str, tier_s: str, wins: int, losses: int, emblem: str | None) -> Cell:
@@ -258,17 +285,7 @@ class OpggService:
 
         runes = d.get("runes") or {}
         if runes:
-            mods = [STAT_MODS.get(int(m), str(m)) for m in (runes.get("stat_mod_ids") or []) if str(m).isdigit()]
-            wr = runes.get("win") / runes["play"] if runes.get("play") else None
-            doc.add_kv(
-                "符文",
-                [
-                    (f"主系 · {runes.get('primary_page_name', '')}", " / ".join(runes.get("primary_rune_names") or [])),
-                    (f"副系 · {runes.get('secondary_page_name', '')}", " / ".join(runes.get("secondary_rune_names") or [])),
-                    ("属性碎片", " / ".join(mods)),
-                    ("使用率", f"{pct(runes.get('pick_rate'))} · 胜率 {pct(wr)}" if wr is not None else pct(runes.get("pick_rate"))),
-                ],
-            )
+            self._add_runes(doc, runes)
 
         def tiles_of(block: dict | None, label: str = "") -> list[Cell]:
             if not block:
@@ -288,38 +305,30 @@ class OpggService:
             if core.get("play"):
                 note = f"核心三件套选用率 {pct(core.get('pick_rate'))} · 胜率 {pct(core['win'] / core['play'])}"
             doc.add_tiles("推荐出装", core_tiles, note)
-        later = []
+        rows, lines = [], []
         for slot, label in (("fourth_items", "第四件"), ("fifth_items", "第五件"), ("sixth_items", "第六件")):
+            opts = []
             for opt in (d.get(slot) or [])[:3]:
                 ids = opt.get("ids") or []
                 names = opt.get("ids_names") or [self.gd.item_name(x) for x in ids]
                 if names:
-                    later.append([
-                        Cell(label, cls="muted"),
-                        Cell(names[0], img=self.gd.item_icon(ids[0]) if ids else None),
-                        pct(opt.get("pick_rate")),
-                    ])
-        doc.add_table("后续装备", ["顺位", "装备", "选用率"], later)
-
-        skills = d.get("skills") or {}
-        mast = d.get("skill_masteries") or {}
-        spells = d.get("summoner_spells") or {}
-        spell_names = [self.gd.spell_name(s) for s in (spells.get("ids") or [])]
-        doc.add_kv(
-            "技能与召唤师技能",
-            [
-                ("主升顺序", " > ".join(mast.get("ids") or [])),
-                ("前 15 级加点", " ".join((skills.get("order") or [])[:15])),
-                ("召唤师技能", " + ".join(spell_names) + (f"（{pct(spells.get('pick_rate'))}）" if spell_names else "")),
-            ],
-        )
-        for key_name, title2, cls in (("weak_counters", "难对付的对手", "lose"), ("strong_counters", "容易对付的对手", "win")):
-            rows = []
+                    opts.append({"icon": self.gd.item_icon(ids[0]) if ids else None, "name": names[0], "sub": pct(opt.get("pick_rate"))})
+            if opts:
+                rows.append({"label": label, "items": opts})
+                lines.append(f"{label}：" + " / ".join(f"{o['name']}({o['sub']})" for o in opts))
+        doc.add_block("后续装备", "iconrows", {"rows": rows}, lines)
+        await self._add_skills(doc, champ, d)
+        counter_rows, counter_lines = [], []
+        for key_name, label, cls in (("weak_counters", "难对付", "lose"), ("strong_counters", "好打", "win")):
+            items = []
             for c in (d.get(key_name) or [])[:5]:
                 name = c.get("champion_name", "?")
                 icon = self.gd.champ_icon(self.gd.champion(c.get("champion_id"))) if c.get("champion_id") else self.gd.champ_icon_by_name(name)
-                rows.append([Cell(name, img=icon), Cell(pct(c.get("my_win_rate")), cls=cls), big(c.get("play"))])
-            doc.add_table(title2, ["英雄", "我方胜率", "场次"], rows)
+                items.append({"icon": icon, "name": name, "sub": f"胜率 {pct(c.get('my_win_rate'))} · {big(c.get('play'))}场", "cls": cls})
+            if items:
+                counter_rows.append({"label": label, "items": items})
+                counter_lines.append(f"{label}：" + " / ".join(f"{i['name']}({i['sub']})" for i in items))
+        doc.add_block("对线克制", "iconrows", {"rows": counter_rows}, counter_lines, note="胜率为本英雄对阵该英雄时的胜率")
         doc.footer = self._foot(created, f"样本 {big(stats.get('play'))} 场")
         if augments is not None:
             self._add_augments(doc, augments)
@@ -330,6 +339,66 @@ class OpggService:
         return View("lol_champion", data, doc, created)
 
     # ============================================================== summoners
+    def _add_runes(self, doc: Doc, runes: dict) -> None:
+        """Rune page like the in-game editor: trees, keystone, minor runes and stat shards."""
+        gd = self.gd
+
+        def runes_of(ids_key: str, names_key: str) -> list[dict]:
+            ids = runes.get(ids_key) or []
+            names = runes.get(names_key) or []
+            out = []
+            for i, rid in enumerate(ids or [None] * len(names)):
+                name = names[i] if i < len(names) else gd.rune_name(rid)
+                out.append({"icon": gd.rune_icon(rid), "name": name or gd.rune_name(rid)})
+            return out
+
+        primary = runes_of("primary_rune_ids", "primary_rune_names")
+        secondary = runes_of("secondary_rune_ids", "secondary_rune_names")
+        shards = [{"icon": gd.rune_icon(m), "name": STAT_MODS.get(int(m), gd.rune_name(m)) if str(m).isdigit() else str(m)}
+                  for m in runes.get("stat_mod_ids") or []]
+        wr = runes.get("win") / runes["play"] if runes.get("play") else None
+        block = {
+            "primary": {"icon": gd.rune_icon(runes.get("primary_page_id")), "name": runes.get("primary_page_name", ""),
+                        "keystone": primary[0] if primary else None, "runes": primary[1:]},
+            "secondary": {"icon": gd.rune_icon(runes.get("secondary_page_id")), "name": runes.get("secondary_page_name", ""), "runes": secondary},
+            "shards": shards,
+            "stats": " · ".join(x for x in [f"使用率 {pct(runes.get('pick_rate'))}", f"胜率 {pct(wr)}" if wr is not None else ""] if x),
+        }
+        lines = [
+            f"主系 · {block['primary']['name']}：" + " / ".join(r["name"] for r in primary),
+            f"副系 · {block['secondary']['name']}：" + " / ".join(r["name"] for r in secondary),
+            "属性碎片：" + " / ".join(s["name"] for s in shards),
+            block["stats"],
+        ]
+        doc.add_block("符文", "runes", block, lines)
+
+    async def _add_skills(self, doc: Doc, champ: dict, d: dict) -> None:
+        """Summoner spells, max order with skill icons and the 15-level skill grid."""
+        skills = d.get("skills") or {}
+        mast = d.get("skill_masteries") or {}
+        spells = d.get("summoner_spells") or {}
+        icons = {s["key"]: s for s in await self.gd.champion_spells(champ)}
+        order = [str(x).upper() for x in (skills.get("order") or [])[:18]]
+        grid = []
+        for key in "QWER":
+            meta = icons.get(key, {})
+            grid.append({"key": key, "icon": meta.get("icon"), "name": meta.get("name", key),
+                         "levels": [i + 1 if k == key else 0 for i, k in enumerate(order)]})
+        block = {
+            "spells": [{"icon": self.gd.spell_icon(s), "name": self.gd.spell_name(s)} for s in spells.get("ids") or []],
+            "spells_pick": pct(spells.get("pick_rate")) if spells.get("pick_rate") is not None else "",
+            "max": [{"key": k, "icon": icons.get(str(k).upper(), {}).get("icon")} for k in mast.get("ids") or []],
+            "max_pick": pct(mast.get("pick_rate")) if mast.get("pick_rate") is not None else "",
+            "grid": grid,
+            "length": len(order),
+        }
+        lines = [
+            "召唤师技能：" + " + ".join(s["name"] for s in block["spells"]) + (f"（{block['spells_pick']}）" if block["spells_pick"] else ""),
+            "主升顺序：" + " > ".join(m["key"] for m in block["max"]),
+            "加点：" + " ".join(order[:15]),
+        ]
+        doc.add_block("技能", "skills", block, lines)
+
     async def mayhem_augments(self, champ: dict) -> list[dict]:
         """ARAM Mayhem augment stats for one champion (OP.GG) merged with names / rarity / icons (CommunityDragon)."""
         try:
@@ -620,26 +689,15 @@ class OpggService:
             games = sorted(games, key=lambda g: g.get("scheduledAt") or "")
         title = ("赛果" if mode == "result" else "赛程") + (f" · {league.upper()}" if league else "")
         doc = Doc(title=f"英雄联盟{title}", subtitle="时间为北京时间" if self.cfg.timezone == "Asia/Shanghai" else self.cfg.timezone, theme="esports")
-        rows = []
+        rows, vs_rows, lines = [], [], []
         for g in games[:limit]:
-            home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
-            hs, as_ = g.get("homeScore"), g.get("awayScore")
-            status = g.get("status") or ""
-            if status == "FINISHED":
-                score = Cell(f"{hs}:{as_}", cls="accent")
-            elif status in ("RUNNING", "IN_PROGRESS", "LIVE"):
-                score = Cell("进行中", cls="win")
-            else:
-                score = Cell("未开始", cls="muted")
-            rows.append([
-                Cell(local_time(g.get("scheduledAt"), self.cfg.timezone), sub=g.get("league") or ""),
-                Cell(f"{home.get('acronym') or home.get('name', '?')} vs {away.get('acronym') or away.get('name', '?')}", img=home.get("image_url"), sub=g.get("name") or ""),
-                f"BO{g.get('numberOfGames')}" if g.get("numberOfGames") else "-",
-                score,
-            ])
-        if not rows:
+            row, line = versus_row(g, self.cfg.timezone)
+            vs_rows.append(row)
+            lines.append(line)
+        if not vs_rows:
             doc.add_text("", "暂无" + ("近期赛果" if mode == "result" else "后续赛程"))
-        doc.add_table("", ["时间", "对阵", "赛制", "比分"], rows)
+        else:
+            doc.add_block("", "versus", {"rows": vs_rows}, lines)
         doc.footer = self._foot(created)
         doc.link = "https://esports.op.gg/schedules"
         return View("lol_esports", {"mode": mode, "league": league, "games": games}, doc, created)
@@ -660,7 +718,7 @@ class OpggService:
             team = s.get("team") or {}
             rows.append([
                 str(s.get("position", "")),
-                Cell(team.get("acronym") or team.get("name", "?"), img=team.get("imageUrl"), sub=team.get("name", "")),
+                Cell(team.get("acronym") or team.get("name", "?"), img=team.get("imageUrl"), sub=team.get("name", ""), cls="logo"),
                 f"{s.get('win', 0)}-{s.get('lose', 0)}",
                 f"{s.get('setWin', 0)}-{s.get('setLose', 0)}",
                 str(s.get("point", "")),

@@ -46,7 +46,7 @@ def render_markdown(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> s
                 out.append(f"_共 {s.total} 条，仅显示前 {len(s.rows)} 条_")
         elif s.kind == "list":
             out.extend(f"- {i}" for i in s.items)
-        elif s.kind == "cards":
+        elif s.kind in ("cards", "runes", "skills", "iconrows", "versus"):
             out.extend(f"- {i}" for i in s.items)
         elif s.kind == "team" and s.items:
             out.append(f"**{s.items[0]}**")

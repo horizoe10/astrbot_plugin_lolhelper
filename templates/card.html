@@ -77,7 +77,7 @@
     content: ""; position: absolute; top: -60%; left: 64%; width: 18%; height: 220%;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); transform: rotate(22deg);
   }
-  tr.rwin td { background: rgba(83,131,232,.08); }
+  tr.rwin td { background: rgba(63,178,127,.08); }
   tr.rlose td { background: rgba(232,64,87,.08); }
   tr.rwin td:first-child { box-shadow: inset 3px 0 0 #3fb27f; }
   tr.rlose td:first-child { box-shadow: inset 3px 0 0 #e84057; }
@@ -110,11 +110,11 @@
   .tile.rank span { font-weight: 800; font-size: 15px; }
   /* ARAM Mayhem augments, framed by in-game rarity */
   .tile.aug { width: 100px; }
-  .tile.aug > img { width: 52px; height: 52px; padding: 4px; border-radius: 12px; background: #0b0f17; border: 2px solid #5b6474; }
+  .tile.aug > img { width: 52px; height: 52px; padding: 4px; border-radius: 12px; background: #0e0e10; border: 2px solid #5b6474; }
   .tile.aug-silver > img { border-color: #b7c4d1; }
   .tile.aug-gold > img { border-color: #e0b252; box-shadow: 0 0 8px rgba(224,178,82,.35); }
   .tile.aug-prismatic > img { border: 2px solid transparent; box-shadow: 0 0 10px rgba(139,92,246,.55);
-    background: linear-gradient(#0b0f17, #0b0f17) padding-box, linear-gradient(135deg, #ffffff, #a9dcff, #8b5cf6, #f0c6ff) border-box; }
+    background: linear-gradient(#0e0e10, #0e0e10) padding-box, linear-gradient(135deg, #ffffff, #a9dcff, #8b5cf6, #f0c6ff) border-box; }
   .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
   .tile { width: 82px; text-align: center; font-size: 12px; }
   .tile img { width: 48px; height: 48px; border-radius: 10px; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 4px; object-fit: cover; }
@@ -128,16 +128,16 @@
   /* ---------- match list cards (League Akari style) ---------- */
   .mc { display: grid; grid-template-columns: 56px 46px 1fr 240px; gap: 10px; align-items: center; padding: 10px 12px;
         border-radius: 10px; margin-bottom: 8px; border-left: 4px solid {{ c.muted }}; background: {{ c.card2 }}; }
-  .mc.mc-win { background: rgba(83,131,232,.15); border-left-color: #5383e8; }
+  .mc.mc-win { background: rgba(63,178,127,.14); border-left-color: #3fb27f; }
   .mc.mc-lose { background: rgba(232,64,87,.15); border-left-color: #e84057; }
   .mc-champ { position: relative; text-align: center; }
   .mc-champ img { width: 52px; height: 52px; border-radius: 10px; display: block; }
-  .lv { position: absolute; left: 34px; top: 36px; background: #0b0f17; color: #fff; font-size: 11px; line-height: 15px;
+  .lv { position: absolute; left: 34px; top: 36px; background: #0e0e10; color: #fff; font-size: 11px; line-height: 15px;
         border-radius: 6px; padding: 0 4px; border: 1px solid {{ c.line }}; }
   .mc-champ .res { display: block; margin-top: 6px; font-size: 14px; font-weight: 800; }
-  .mc-win .res { color: #5b9cff; } .mc-lose .res { color: #ff5a6e; } .mc-remake .res { color: {{ c.muted }}; }
+  .mc-win .res { color: #3fd18a; } .mc-lose .res { color: #ff5a6e; } .mc-remake .res { color: {{ c.muted }}; }
   .sr { display: grid; grid-template-columns: 21px 21px; gap: 3px; }
-  .sr img, .sr i { width: 21px; height: 21px; border-radius: 5px; background: #0b0f17; display: block; }
+  .sr img, .sr i { width: 21px; height: 21px; border-radius: 5px; background: #0e0e10; display: block; }
   .mc-stats { display: flex; gap: 24px; align-items: flex-end; }
   .mc-stats b { font-size: 19px; font-weight: 800; }
   .mc-stats small, .mc-foot { display: block; color: {{ c.muted }}; font-size: 12px; }
@@ -159,8 +159,8 @@
   /* ---------- team panels of a match detail ---------- */
   .tm { border-radius: 12px; overflow: hidden; margin-bottom: 12px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; }
   .tm-head { display: flex; align-items: center; gap: 16px; padding: 9px 12px; font-size: 14px; }
-  .tm-win .tm-head { background: rgba(83,131,232,.2); } .tm-lose .tm-head { background: rgba(232,64,87,.2); }
-  .tm-head b { font-size: 15px; } .tm-win .tm-head b { color: #5b9cff; } .tm-lose .tm-head b { color: #ff5a6e; }
+  .tm-win .tm-head { background: rgba(63,178,127,.18); } .tm-lose .tm-head { background: rgba(232,64,87,.2); }
+  .tm-head b { font-size: 15px; } .tm-win .tm-head b { color: #3fd18a; } .tm-lose .tm-head b { color: #ff5a6e; }
   .tm-head .obj { color: {{ c.muted }}; font-size: 13px; }
   .tm-head .bans { margin-left: auto; display: flex; gap: 3px; align-items: center; color: {{ c.muted }}; font-size: 12px; }
   .tm-head .bans img { width: 20px; height: 20px; border-radius: 4px; filter: grayscale(.7); }
@@ -182,6 +182,73 @@
   .trow .nm small { overflow: hidden; }
   .tagp.mini { font-size: 10px; line-height: 14px; padding: 0 5px; margin-left: 4px; vertical-align: 1px; }
   .tm-head .bans i.noban { width: 20px; height: 20px; border-radius: 4px; display: inline-block; background: rgba(255,255,255,.06); border: 1px dashed rgba(255,255,255,.18); }
+
+  /* ---------- rune page ---------- */
+  .rp { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; }
+  .rp-tree { background: {{ c.card2 }}; border-radius: 12px; padding: 12px 14px; }
+  .rp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .rp-head img { width: 26px; height: 26px; }
+  .rp-head b { font-size: 15px; }
+  .rp-head span { margin-left: auto; color: {{ c.muted }}; font-size: 12px; }
+  .rp-key { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .rp-key img { width: 58px; height: 58px; border-radius: 50%; background: #0e0e10; box-shadow: 0 0 0 2px #c8aa6e; padding: 3px; }
+  .rp-key span { font-size: 16px; font-weight: 800; color: #f0e6d2; }
+  .rp-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .rp-r { width: 72px; text-align: center; font-size: 12px; }
+  .rp-r img { width: 38px; height: 38px; border-radius: 50%; background: #0e0e10; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 4px; }
+  .rp-shards { display: flex; gap: 14px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed {{ c.line }}; }
+  .rp-s { text-align: center; font-size: 11px; color: {{ c.muted }}; }
+  .rp-s img { width: 26px; height: 26px; border-radius: 50%; background: #0e0e10; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 3px; padding: 2px; }
+  /* ---------- skills ---------- */
+  .sk-top { display: flex; gap: 28px; align-items: center; margin-bottom: 12px; }
+  .sk-top .lbl { color: {{ c.muted }}; font-size: 12px; margin-right: 8px; }
+  .sk-top small { color: {{ c.muted }}; font-size: 12px; margin-left: 8px; }
+  .sk-sp, .sk-max { display: flex; align-items: center; }
+  .sk-sp img { width: 36px; height: 36px; border-radius: 8px; margin-right: 6px; }
+  .sk-k { position: relative; display: inline-block; }
+  .sk-k img { width: 36px; height: 36px; border-radius: 8px; display: block; }
+  .sk-k b { position: absolute; right: -4px; bottom: -4px; font-size: 11px; line-height: 15px; padding: 0 4px; border-radius: 5px; background: #0e0e10; border: 1px solid {{ c.line }}; }
+  .sk-max .arr { font-style: normal; color: {{ c.muted }}; font-size: 20px; margin: 0 8px; }
+  .sk-grid { display: grid; gap: 3px; align-items: center; }
+  .sk-lbl { display: flex; align-items: center; gap: 4px; }
+  .sk-lbl img { width: 22px; height: 22px; border-radius: 5px; }
+  .sk-lbl b { font-size: 12px; color: {{ c.muted }}; }
+  .sk-c { height: 22px; border-radius: 4px; background: rgba(255,255,255,.05); font-size: 11px; font-weight: 800; text-align: center; line-height: 22px; color: #0e0e10; }
+  .sk-c.k-Q { background: #4f8ef7; } .sk-c.k-W { background: #3fb27f; } .sk-c.k-E { background: #e8913b; } .sk-c.k-R { background: #e0b252; }
+  /* ---------- icon rows (later items) ---------- */
+  .ir { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid {{ c.line }}; }
+  .ir:last-child { border-bottom: none; }
+  .ir-l { width: 56px; color: {{ c.muted }}; font-size: 13px; }
+  .ir-i { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  .ir-i > div { min-width: 0; }
+  .ir-i b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ir-i img { width: 34px; height: 34px; border-radius: 7px; }
+  .ir-i b { display: block; font-size: 13px; font-weight: 600; }
+  .ir-i small { color: {{ c.muted }}; font-size: 12px; white-space: nowrap; }
+  .ir-i small.win { color: #3fd18a; font-weight: 700; } .ir-i small.lose { color: #ff5a6e; font-weight: 700; }
+  /* ---------- esports versus ---------- */
+  td.vs-home, td.vs-away { font-weight: 800; }
+  td.vs-away img { float: right; margin: 0 0 0 6px; }
+  td.vs-away { text-align: right; }
+  td.logo img { object-fit: contain; border-radius: 0; background: transparent; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.12)); }
+  .vs { display: grid; grid-template-columns: 1fr 150px 1fr; align-items: center; gap: 10px; padding: 12px 16px 14px; margin-bottom: 8px; border-radius: 12px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; }
+  .vs-top { grid-column: 1 / 4; text-align: center; font-size: 12px; color: {{ c.muted }}; letter-spacing: .5px; }
+  .vs-top b { color: {{ c.text }}; font-weight: 600; margin: 0 6px; }
+  .vs-t { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .vs-t.h { justify-content: flex-end; text-align: right; }
+  .vs-t.a { justify-content: flex-start; text-align: left; }
+  .vs-logo { width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .vs-logo img { max-width: 44px; max-height: 44px; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.12)); }
+  .vs-n { font-size: 20px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vs-t.win .vs-n { color: #3fd18a; }
+  .vs-t.lose { opacity: .55; }
+  .vs-t.lose .vs-n { color: {{ c.muted }}; }
+  .vs-m { text-align: center; }
+  .vs-s { display: inline-block; min-width: 96px; padding: 4px 12px; border-radius: 999px; font-size: 24px; font-weight: 800; letter-spacing: 2px; background: {{ c.card }}; border: 1px solid {{ c.line }}; }
+  .vs-s.live { color: #ff5d5d; border-color: #ff5d5d; }
+  .vs-s.todo { color: {{ c.muted }}; font-size: 18px; }
+  .vs-sub { margin-top: 4px; font-size: 12px; color: {{ c.muted }}; }
+  .vs-sub .live { color: #ff5d5d; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -262,6 +329,45 @@
         </div>
         {% endfor %}
       </div>
+    {% elif s.kind == "runes" %}
+      {% set b = s.block %}
+      <div class="rp">
+        <div class="rp-tree">
+          <div class="rp-head">{% if b.primary.icon %}<img src="{{ b.primary.icon|e }}">{% endif %}<b>{{ b.primary.name|e }}</b><span>主系</span></div>
+          {% if b.primary.keystone %}<div class="rp-key">{% if b.primary.keystone.icon %}<img src="{{ b.primary.keystone.icon|e }}">{% endif %}<span>{{ b.primary.keystone.name|e }}</span></div>{% endif %}
+          <div class="rp-row">{% for r in b.primary.runes %}<div class="rp-r">{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}{{ r.name|e }}</div>{% endfor %}</div>
+        </div>
+        <div class="rp-tree">
+          <div class="rp-head">{% if b.secondary.icon %}<img src="{{ b.secondary.icon|e }}">{% endif %}<b>{{ b.secondary.name|e }}</b><span>副系</span></div>
+          <div class="rp-row">{% for r in b.secondary.runes %}<div class="rp-r">{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}{{ r.name|e }}</div>{% endfor %}</div>
+          {% if b.shards %}<div class="rp-shards">{% for x in b.shards %}<div class="rp-s">{% if x.icon %}<img src="{{ x.icon|e }}">{% endif %}{{ x.name|e }}</div>{% endfor %}</div>{% endif %}
+        </div>
+      </div>
+      {% if b.stats %}<div class="note">{{ b.stats|e }}</div>{% endif %}
+    {% elif s.kind == "skills" %}
+      {% set b = s.block %}
+      <div class="sk-top">
+        {% if b.spells %}<div class="sk-sp"><span class="lbl">召唤师技能</span>{% for x in b.spells %}{% if x.icon %}<img src="{{ x.icon|e }}">{% endif %}{% endfor %}{% if b.spells_pick %}<small>{{ b.spells_pick|e }}</small>{% endif %}</div>{% endif %}
+        {% if b.max %}<div class="sk-max"><span class="lbl">主升</span>{% for m in b.max %}<span class="sk-k">{% if m.icon %}<img src="{{ m.icon|e }}">{% endif %}<b>{{ m.key|e }}</b></span>{% if not loop.last %}<i class="arr">›</i>{% endif %}{% endfor %}{% if b.max_pick %}<small>{{ b.max_pick|e }}</small>{% endif %}</div>{% endif %}
+      </div>
+      {% if b.length %}
+      <div class="sk-grid" style="grid-template-columns: 40px repeat({{ b.length }}, 1fr);">
+        {% for row in b.grid %}<div class="sk-lbl">{% if row.icon %}<img src="{{ row.icon|e }}">{% endif %}<b>{{ row.key|e }}</b></div>{% for lv in row.levels %}<div class="sk-c{% if lv %} k-{{ row.key|e }}{% endif %}">{% if lv %}{{ lv }}{% endif %}</div>{% endfor %}{% endfor %}
+      </div>
+      {% endif %}
+    {% elif s.kind == "iconrows" %}
+      {% for r in s.block.rows %}
+      <div class="ir"><span class="ir-l">{{ r.label|e }}</span>{% for it in r['items'] %}<div class="ir-i">{% if it.icon %}<img src="{{ it.icon|e }}">{% endif %}<div><b>{{ it.name|e }}</b><small class="{{ it.cls|e }}">{{ it.sub|e }}</small></div></div>{% endfor %}</div>
+      {% endfor %}
+    {% elif s.kind == "versus" %}
+      {% for v in s.block.rows %}
+      <div class="vs">
+        <div class="vs-top">{{ v.time|e }}<b>{{ v.league|e }}</b>{{ v.stage|e }}</div>
+        <div class="vs-t h{% if v.home.win %} win{% elif v.home.lose %} lose{% endif %}"><span class="vs-n">{{ v.home.name|e }}</span><span class="vs-logo">{% if v.home.logo %}<img src="{{ v.home.logo|e }}">{% endif %}</span></div>
+        <div class="vs-m"><span class="vs-s {{ v.score_cls|e }}">{{ v.score|e }}</span><div class="vs-sub">{{ v.bo|e }}{% if v.bo %} · {% endif %}<span class="{{ v.score_cls|e }}">{{ v.state|e }}</span></div></div>
+        <div class="vs-t a{% if v.away.win %} win{% elif v.away.lose %} lose{% endif %}"><span class="vs-logo">{% if v.away.logo %}<img src="{{ v.away.logo|e }}">{% endif %}</span><span class="vs-n">{{ v.away.name|e }}</span></div>
+      </div>
+      {% endfor %}
     {% elif s.kind == "text" %}
       <div class="text">{{ s.text|e }}</div>
     {% endif %}

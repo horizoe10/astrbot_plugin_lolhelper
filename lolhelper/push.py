@@ -11,7 +11,7 @@ from typing import Awaitable, Callable
 from .doc import Doc
 from .errors import LolHelperError
 from .fmt import get_tz, local_time, parse_time
-from .service import OpggService, View
+from .service import OpggService, View, versus_row
 from .storage import account_key, account_label
 
 SendFn = Callable[[str, View], Awaitable[None]]
@@ -188,12 +188,11 @@ class PushManager:
     def esports_view(self, g: dict, headline: str) -> View:
         home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
         h, a = home.get("acronym") or home.get("name"), away.get("acronym") or away.get("name")
-        doc = Doc(title=f"{h} vs {a}", subtitle=f"{g.get('league', '')} · {g.get('name', '')}", icon=home.get("image_url"), theme="esports")
+        stage = str(g.get("name") or "").split(":")[0].strip()
+        doc = Doc(title=f"{h} vs {a}", subtitle=" · ".join(x for x in [g.get("league") or "", stage] if x), icon=home.get("image_url"), theme="esports")
         doc.badge(headline, "accent")
-        pairs = [("开赛时间", local_time(g.get("scheduledAt"), self.f.s.timezone, "%m-%d %H:%M")), ("赛制", f"BO{g.get('numberOfGames')}")]
-        if g.get("status") == "FINISHED":
-            pairs.append(("比分", f"{h} {g.get('homeScore')} : {g.get('awayScore')} {a}"))
-        doc.add_kv("", pairs)
+        row, line = versus_row(g, self.f.s.timezone)
+        doc.add_block("", "versus", {"rows": [row]}, [line])
         doc.link = g.get("details") or ""
         return View("push_esports", g, doc, time.time())
 

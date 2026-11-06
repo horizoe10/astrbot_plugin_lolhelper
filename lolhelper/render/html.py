@@ -12,8 +12,8 @@ TEMPLATE_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "c
 
 THEMES: dict[str, dict[str, str]] = {
     "dark": {
-        "bg": "#0e131c", "card": "#161d2a", "card2": "#1d2636", "text": "#e6e9ef",
-        "muted": "#8b95a7", "line": "#273246",
+        "bg": "#0c0c0e", "card": "#161618", "card2": "#202024", "text": "#ececef",
+        "muted": "#8f8f98", "line": "#2c2c31",
     },
     "light": {
         "bg": "#eef1f6", "card": "#ffffff", "card2": "#f5f7fb", "text": "#1f2633",

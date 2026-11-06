@@ -42,6 +42,7 @@ class Section:
     total: int = 0  # original number of rows before truncation
     cards: list[dict] = field(default_factory=list)  # match list cards (image only)
     team: dict = field(default_factory=dict)  # team panel of a match detail (image only)
+    block: dict = field(default_factory=dict)  # structured data for runes / skills / iconrows (image only)
 
 
 @dataclass
@@ -102,6 +103,12 @@ class Doc:
 
     def add_team(self, team: dict, lines: list[str]) -> "Doc":
         self.sections.append(Section(title="", kind="team", team=team, items=lines))
+        return self
+
+    def add_block(self, title: str, kind: str, block: dict, lines: list[str], note: str = "") -> "Doc":
+        """Image-only visual block; lines are what the text / Markdown renderers print."""
+        if block and any(lines):
+            self.sections.append(Section(title=title, kind=kind, block=block, items=[x for x in lines if x], note=note))
         return self
 
     def to_dict(self) -> dict[str, Any]:

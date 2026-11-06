@@ -21,7 +21,7 @@ from .net import HttpClient
 from .nicknames import NICKNAMES
 
 _NORM_RE = re.compile(r"[\s'’·.\-_]+")
-SCHEMA = 4  # bump when the cached game data layout changes
+SCHEMA = 5  # bump when the cached game data layout changes
 
 RARITY = {"kSilver": "silver", "kGold": "gold", "kPrismatic": "prismatic"}
 
@@ -52,6 +52,7 @@ class GameData:
         self.lol: dict[str, Any] = {}
         self.tft: dict[str, Any] = {}
         self._lol_lock = asyncio.Lock()
+        self._spells_cache: dict[str, list[dict]] = {}
         self._tft_lock = asyncio.Lock()
         self._champ_index: dict[str, str] = {}
         self._zh_name_index: dict[str, str] = {}
@@ -134,6 +135,18 @@ class GameData:
                     rune_icons[str(perk["id"])] = perk.get("icon", "")
                     rune_names[str(perk["id"])] = perk.get("name", "")
         augments: dict[str, dict] = {}
+        perk_icons: dict[str, str] = {}
+        try:
+            # CommunityDragon perks include stat shards (5001-5013), which Data Dragon lacks.
+            perks = await self.http.get_json(f"{self.cdragon}/latest/plugins/rcp-be-lol-game-data/global/zh_cn/v1/perks.json")
+            for p in perks or []:
+                icon = p.get("iconPath") or ""
+                if icon.startswith("/lol-game-data/assets/"):
+                    perk_icons[str(p.get("id"))] = f"{self.cdragon}/latest/plugins/rcp-be-lol-game-data/global/default/" + icon[len("/lol-game-data/assets/"):].lower()
+                if p.get("name") and str(p.get("id")) not in rune_names:
+                    rune_names[str(p.get("id"))] = p["name"]
+        except Exception as exc:
+            self.logger.warning(f"[lolhelper] 属性碎片图标获取失败：{exc}")
         try:
             # Arena + ARAM Mayhem augments: names, rarity and icons (OP.GG only gives ids and stats)
             raw = await self.http.get_json(f"{self.cdragon}/latest/plugins/rcp-be-lol-game-data/global/zh_cn/v1/cherry-augments.json")
@@ -158,6 +171,7 @@ class GameData:
             "rune_icons": rune_icons,
             "rune_names": rune_names,
             "augments": augments,
+            "perk_icons": perk_icons,
             "schema": SCHEMA,
         }
 
@@ -316,7 +330,26 @@ class GameData:
         if not rune_id:
             return None
         path = (self.lol.get("rune_icons") or {}).get(str(rune_id))
-        return f"{self.ddragon}/cdn/img/{path}" if path else None
+        if path:
+            return f"{self.ddragon}/cdn/img/{path}"
+        return (self.lol.get("perk_icons") or {}).get(str(rune_id))
+
+    async def champion_spells(self, champ: dict) -> list[dict]:
+        """Passive + Q/W/E/R names and icons for one champion (Data Dragon, cached in memory)."""
+        key = champ["key"]
+        if key in self._spells_cache:
+            return self._spells_cache[key]
+        out: list[dict] = []
+        try:
+            data = await self.http.get_json(f"{self.ddragon}/cdn/{self.version}/data/zh_CN/champion/{key}.json")
+            c = (data.get("data") or {}).get(key) or {}
+            for slot, s in zip("QWER", c.get("spells") or []):
+                out.append({"key": slot, "name": s.get("name", slot),
+                            "icon": f"{self.ddragon}/cdn/{self.version}/img/spell/{(s.get('image') or {}).get('full', '')}"})
+        except Exception as exc:
+            self.logger.info(f"[lolhelper] 获取 {key} 技能图标失败：{exc}")
+        self._spells_cache[key] = out
+        return out
 
     def rune_name(self, rune_id: int | str | None) -> str:
         return (self.lol.get("rune_names") or {}).get(str(rune_id), "") if rune_id else ""
