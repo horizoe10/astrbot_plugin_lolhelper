@@ -30,6 +30,7 @@ HELP = """联盟助手 v{version}
 
 英雄联盟
 /lol 英雄 <英雄> [位置] [模式]   出装/符文/克制
+/lol 海克斯 <英雄>              海克斯大乱斗：出装 + 强化推荐
 /lol 梯队 [位置]                版本强势英雄
 /lol 战绩 [名字#标签] [大区]     最近对局（可@已绑定的人）
 /lol 资料 [名字#标签] [大区]     段位与常用英雄
@@ -197,6 +198,17 @@ class LolHelperPlugin(Star):
             yield self._plain(event, "用法：/lol 英雄 <英雄名> [位置] [排位/大乱斗]")
             return
         yield await self._answer(event, lambda: self.f.champion(" ".join(words), pos, mode), a.mode)
+
+    @lol.command("海克斯", alias={"海克斯大乱斗", "mayhem"})
+    async def lol_mayhem(self, event: AstrMessageEvent):
+        """海克斯大乱斗：/lol 海克斯 亚索"""
+        a = parse_args(self._rest(event, {"海克斯", "海克斯大乱斗", "mayhem"}))
+        _, words = pick_position(a.words)
+        _, words = pick_game_mode(words)
+        if not words:
+            yield self._plain(event, "用法：/lol 海克斯 <英雄名>")
+            return
+        yield await self._answer(event, lambda: self.f.champion(" ".join(words), None, "mayhem"), a.mode)
 
     @lol.command("梯队", alias={"tier", "强势", "版本"})
     async def lol_tier(self, event: AstrMessageEvent):

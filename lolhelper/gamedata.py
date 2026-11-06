@@ -21,7 +21,9 @@ from .net import HttpClient
 from .nicknames import NICKNAMES
 
 _NORM_RE = re.compile(r"[\s'’·.\-_]+")
-SCHEMA = 3  # bump when the cached game data layout changes
+SCHEMA = 4  # bump when the cached game data layout changes
+
+RARITY = {"kSilver": "silver", "kGold": "gold", "kPrismatic": "prismatic"}
 
 
 def norm(s: str) -> str:
@@ -131,6 +133,21 @@ class GameData:
                 for perk in slot.get("runes") or []:
                     rune_icons[str(perk["id"])] = perk.get("icon", "")
                     rune_names[str(perk["id"])] = perk.get("name", "")
+        augments: dict[str, dict] = {}
+        try:
+            # Arena + ARAM Mayhem augments: names, rarity and icons (OP.GG only gives ids and stats)
+            raw = await self.http.get_json(f"{self.cdragon}/latest/plugins/rcp-be-lol-game-data/global/zh_cn/v1/cherry-augments.json")
+            for a in raw or []:
+                icon = a.get("augmentSmallIconPath") or ""
+                if icon.startswith("/lol-game-data/assets/"):
+                    icon = f"{self.cdragon}/latest/plugins/rcp-be-lol-game-data/global/default/" + icon[len("/lol-game-data/assets/"):].lower()
+                augments[str(a.get("id"))] = {
+                    "name": a.get("nameTRA") or a.get("name") or "",
+                    "rarity": RARITY.get(a.get("rarity"), ""),
+                    "icon": icon or None,
+                }
+        except Exception as exc:
+            self.logger.warning(f"[lolhelper] 海克斯强化数据获取失败，将只显示名称：{exc}")
         return {
             "fetched_at": time.time(),
             "version": version,
@@ -140,6 +157,7 @@ class GameData:
             "spell_icons": {str(v["key"]): (v.get("image") or {}).get("full", "") for v in spells["data"].values()},
             "rune_icons": rune_icons,
             "rune_names": rune_names,
+            "augments": augments,
             "schema": SCHEMA,
         }
 
@@ -302,6 +320,9 @@ class GameData:
 
     def rune_name(self, rune_id: int | str | None) -> str:
         return (self.lol.get("rune_names") or {}).get(str(rune_id), "") if rune_id else ""
+
+    def augment(self, augment_id: int | str) -> dict:
+        return (self.lol.get("augments") or {}).get(str(augment_id)) or {}
 
     def profile_icon(self, icon_id: int | str | None) -> str | None:
         if icon_id in (None, "") or not self.version:

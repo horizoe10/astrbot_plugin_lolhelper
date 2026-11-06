@@ -34,7 +34,7 @@ def test_opgg_game_detail_card(gd):
     assert "MVP" in text and "ACE" in text  # best of winners / losers
     assert "禁用 疾风剑豪" in text and "▶ 疾风剑豪 Hide on bush 7/4/6" in text
     html = render_html(doc)
-    assert 'class="tp me"' in html and "SummonerFlash.png" in html
+    assert 'class="trow me"' in html and "SummonerFlash.png" in html
 
 
 def test_sgp_game_detail_without_scores(gd):

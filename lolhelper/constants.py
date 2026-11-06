@@ -164,12 +164,14 @@ GAME_MODES: dict[str, str] = {
     "aram": "极地大乱斗",
     "urf": "无限火力",
     "nexus_blitz": "极限闪击",
+    "mayhem": "海克斯大乱斗",
 }
 
 GAME_MODE_ALIASES: dict[str, str] = {
     "排位": "ranked", "单排": "ranked", "单双排": "ranked", "ranked": "ranked",
     "灵活": "flex", "灵活排位": "flex", "组排": "flex", "flex": "flex",
     "大乱斗": "aram", "乱斗": "aram", "aram": "aram",
+    "海克斯大乱斗": "mayhem", "海克斯乱斗": "mayhem", "海克斯": "mayhem", "mayhem": "mayhem",
     "无限火力": "urf", "无限": "urf", "urf": "urf",
     "闪击": "nexus_blitz", "极限闪击": "nexus_blitz",
 }
@@ -205,6 +207,8 @@ QUEUE_TYPES_ZH: dict[str, str] = {
     "RANKED_TFT_TURBO": "云顶狂暴",
     "NORMAL": "匹配",
     "ARAM": "极地大乱斗",
+    "ARAM_MAYHEM": "海克斯大乱斗",
+    "KIWI": "海克斯大乱斗",
     "URF": "无限火力",
     "BOT": "人机",
     "CLASH": "冠军杯赛",

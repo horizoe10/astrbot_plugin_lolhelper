@@ -207,26 +207,33 @@ class OpggService:
         await self.gd.ensure_lol()
         champ = self.gd.resolve_champion(query)
         mode = mode or "ranked"
-        if mode in ("urf", "nexus_blitz"):
+        # OP.GG has no separate ARAM Mayhem build data: builds come from ARAM, plus Mayhem augments.
+        api_mode = "aram" if mode == "mayhem" else mode
+        if api_mode in ("urf", "nexus_blitz"):
             api_pos = "none"
-        elif mode == "aram":
+        elif api_mode == "aram":
             api_pos = "mid"  # ARAM ignores lanes but the API needs a real one
         else:
             api_pos = position or await self.primary_position(champ)
-        key = f"champ:{champ['key']}:{api_pos}:{mode}"
+        key = f"champ:{champ['key']}:{api_pos}:{api_mode}"
         try:
-            raw, created = await self._cached(
+            build_task = self._cached(
                 key,
                 self.cfg.ttl_build,
                 "lol_get_champion_analysis",
                 {
-                    "game_mode": mode,
+                    "game_mode": api_mode,
                     "champion": champ["key"].upper(),
                     "position": api_pos,
                     "lang": self.cfg.lang,
                     "desired_output_fields": F_CHAMPION,
                 },
             )
+            if mode == "mayhem":
+                (raw, created), augments = await asyncio.gather(build_task, self.mayhem_augments(champ))
+            else:
+                raw, created = await build_task
+                augments = None
         except UpstreamError as exc:
             if api_pos == "none" and "position" in str(exc).lower() or "位置" in str(exc):
                 raise UsageError(f"OP.GG 暂不提供{GAME_MODES.get(mode, mode)}的英雄数据") from exc
@@ -314,10 +321,64 @@ class OpggService:
                 rows.append([Cell(name, img=icon), Cell(pct(c.get("my_win_rate")), cls=cls), big(c.get("play"))])
             doc.add_table(title2, ["英雄", "我方胜率", "场次"], rows)
         doc.footer = self._foot(created, f"样本 {big(stats.get('play'))} 场")
+        if augments is not None:
+            self._add_augments(doc, augments)
+            doc.footer += " · 出装与符文为极地大乱斗数据"
         lane = api_pos if api_pos in POSITIONS else ""
         doc.link = f"https://op.gg/lol/champions/{champ['key'].lower()}/build" + (f"/{lane}" if lane else "")
         data = {"champion": champ, "position": api_pos, "mode": mode, "analysis": d}
         return View("lol_champion", data, doc, created)
+
+    # ============================================================== summoners
+    async def mayhem_augments(self, champ: dict) -> list[dict]:
+        """ARAM Mayhem augment stats for one champion (OP.GG) merged with names / rarity / icons (CommunityDragon)."""
+        try:
+            raw, _ = await self._cached(
+                f"mayhem:{champ['id']}",
+                self.cfg.ttl_build,
+                "lol_list_aram_augments",
+                {
+                    "champion_id": int(champ["id"]),
+                    "lang": self.cfg.lang,
+                    "desired_output_fields": ["data.augments[].{id,name,tier,performance,popular}"],
+                },
+            )
+        except UpstreamError as exc:
+            self.logger.info(f"[lolhelper] 海克斯强化数据获取失败：{exc}")
+            return []
+        out = []
+        for a in dig(raw, "data.augments", []) or []:
+            meta = self.gd.augment(a.get("id"))
+            name = a.get("name") or meta.get("name")
+            if not name:
+                continue
+            out.append({
+                "id": a.get("id"),
+                "name": name,
+                "rarity": meta.get("rarity", ""),
+                "icon": meta.get("icon"),
+                "performance": float(a.get("performance") or 0),
+                "popular": float(a.get("popular") or 0),
+            })
+        return out
+
+    def _add_augments(self, doc: Doc, augments: list[dict], per_group: int = 6, min_pick: float = 0.02) -> None:
+        """Group by in-game rarity, rank by OP.GG performance score, skip tiny samples."""
+        groups = (("prismatic", "棱彩"), ("gold", "黄金"), ("silver", "白银"))
+        eligible = [a for a in augments if a["popular"] >= min_pick]
+        if not eligible:
+            doc.add_text("海克斯强化推荐", "OP.GG 暂无该英雄的海克斯大乱斗强化数据")
+            return
+        for rarity, label in groups:
+            picks = sorted((a for a in eligible if a["rarity"] == rarity), key=lambda a: a["performance"], reverse=True)[:per_group]
+            doc.add_tiles(
+                f"海克斯强化 · {label}",
+                [Cell(a["name"], img=a["icon"], cls=f"aug aug-{rarity}", sub=f"强度 {a['performance']:.0f} · {pct(a['popular'], 0)}") for a in picks],
+            )
+        others = sorted((a for a in eligible if a["rarity"] not in ("prismatic", "gold", "silver")), key=lambda a: a["performance"], reverse=True)[:per_group]
+        doc.add_tiles("海克斯强化", [Cell(a["name"], img=a["icon"], cls="aug", sub=f"强度 {a['performance']:.0f} · {pct(a['popular'], 0)}") for a in others])
+        if doc.sections:
+            doc.sections[-1].note = doc.sections[-1].note or f"强度为 OP.GG 强度分，百分比为选取率；已排除选取率低于 {pct(min_pick, 0)} 的强化"
 
     # ============================================================== summoners
     async def _profile(self, name: str, tag: str, region: str, ttl: float | None = None) -> tuple[dict, float]:

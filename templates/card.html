@@ -108,6 +108,13 @@
                background: {{ c.card2 }}; border-radius: 12px; padding: 8px 14px 8px 8px; font-size: 14px; }
   .tile.rank > img { width: 64px; height: 64px; border: none; margin: 0; border-radius: 0; object-fit: contain; }
   .tile.rank span { font-weight: 800; font-size: 15px; }
+  /* ARAM Mayhem augments, framed by in-game rarity */
+  .tile.aug { width: 100px; }
+  .tile.aug > img { width: 52px; height: 52px; padding: 4px; border-radius: 12px; background: #0b0f17; border: 2px solid #5b6474; }
+  .tile.aug-silver > img { border-color: #b7c4d1; }
+  .tile.aug-gold > img { border-color: #e0b252; box-shadow: 0 0 8px rgba(224,178,82,.35); }
+  .tile.aug-prismatic > img { border: 2px solid transparent; box-shadow: 0 0 10px rgba(139,92,246,.55);
+    background: linear-gradient(#0b0f17, #0b0f17) padding-box, linear-gradient(135deg, #ffffff, #a9dcff, #8b5cf6, #f0c6ff) border-box; }
   .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
   .tile { width: 82px; text-align: center; font-size: 12px; }
   .tile img { width: 48px; height: 48px; border-radius: 10px; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 4px; object-fit: cover; }
@@ -136,7 +143,7 @@
   .mc-stats small, .mc-foot { display: block; color: {{ c.muted }}; font-size: 12px; }
   .mc-kda .d { color: #ff5a6e; }
   .mc-items { margin-top: 7px; display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
-  .mc-items img, .mc-items i, .tp-items img, .tp-items i { width: 22px; height: 22px; border-radius: 5px; background: rgba(0,0,0,.35); display: block; }
+  .mc-items img, .mc-items i, .trow-items img, .trow-items i { width: 22px; height: 22px; border-radius: 5px; background: rgba(0,0,0,.35); display: block; }
   .mc-items i:nth-child(7), .mc-items img:nth-child(7) { margin-right: 6px; border-radius: 50%; }
   .tagp { padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; line-height: 18px; }
   .tag-blue { background: #2f6fde; } .tag-purple { background: #8b3fd9; } .tag-green { background: #1f9d6b; }
@@ -157,22 +164,22 @@
   .tm-head .obj { color: {{ c.muted }}; font-size: 13px; }
   .tm-head .bans { margin-left: auto; display: flex; gap: 3px; align-items: center; color: {{ c.muted }}; font-size: 12px; }
   .tm-head .bans img { width: 20px; height: 20px; border-radius: 4px; filter: grayscale(.7); }
-  .tp { display: grid; grid-template-columns: 40px 46px 176px 92px 106px 64px 66px 1fr; gap: 8px; align-items: center;
+  .trow { display: grid; grid-template-columns: 40px 46px 176px 92px 106px 64px 66px 1fr; gap: 8px; align-items: center;
         padding: 6px 12px; border-top: 1px solid {{ c.line }}; font-size: 13px; }
-  .tp.me { background: rgba(83,131,232,.18); box-shadow: inset 3px 0 0 {{ c.accent }}; }
-  .tp-champ { position: relative; }
-  .tp-champ img { width: 36px; height: 36px; border-radius: 50%; display: block; }
-  .tp-champ .lv { left: 22px; top: 22px; }
-  .tp .nm b { display: block; max-width: 176px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .tp.me .nm b { font-weight: 800; }
-  .tp small { display: block; color: {{ c.muted }}; font-size: 11px; white-space: nowrap; }
+  .trow.me { background: rgba(83,131,232,.18); box-shadow: inset 3px 0 0 {{ c.accent }}; }
+  .trow-champ { position: relative; }
+  .trow-champ img { width: 36px; height: 36px; border-radius: 50%; display: block; }
+  .trow-champ .lv { left: 22px; top: 22px; }
+  .trow .nm b { display: block; max-width: 176px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .trow.me .nm b { font-weight: 800; }
+  .trow small { display: block; color: {{ c.muted }}; font-size: 11px; white-space: nowrap; }
   .bar span { font-size: 12px; }
   .bar .track { height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; margin: 2px 0 3px; overflow: hidden; }
   .bar .track i { display: block; height: 100%; border-radius: 3px; }
   .bar .o { background: #e8743b; } .bar .b { background: #4a90e2; }
-  .tp-items { display: flex; gap: 2px; }
-  .tp-items img, .tp-items i { width: 20px; height: 20px; }
-  .tp .nm small { overflow: hidden; }
+  .trow-items { display: flex; gap: 2px; }
+  .trow-items img, .trow-items i { width: 20px; height: 20px; }
+  .trow .nm small { overflow: hidden; }
   .tagp.mini { font-size: 10px; line-height: 14px; padding: 0 5px; margin-left: 4px; vertical-align: 1px; }
   .tm-head .bans i.noban { width: 20px; height: 20px; border-radius: 4px; display: inline-block; background: rgba(255,255,255,.06); border: 1px dashed rgba(255,255,255,.18); }
 </style>
@@ -243,15 +250,15 @@
           <span class="obj">{% for o in t.obj %}{{ o[0]|e }} {{ o[1] }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
           {% if t.bans %}<span class="bans">禁用 {% for u in t.bans %}{% if u %}<img src="{{ u|e }}">{% else %}<i class="noban"></i>{% endif %}{% endfor %}</span>{% endif %}</div>
         {% for r in t.rows %}
-        <div class="tp {{ 'me' if r.me else '' }}">
-          <div class="tp-champ">{% if r.champ %}<img src="{{ r.champ|e }}">{% endif %}{% if r.level %}<span class="lv">{{ r.level|e }}</span>{% endif %}</div>
+        <div class="trow {{ 'me' if r.me else '' }}">
+          <div class="trow-champ">{% if r.champ %}<img src="{{ r.champ|e }}">{% endif %}{% if r.level %}<span class="lv">{{ r.level|e }}</span>{% endif %}</div>
           <div class="sr">{% for u in r.sr %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>
           <div class="nm"><b>{{ r.name|e }} <span class="muted">{{ r.tag|e }}</span></b><small>{{ r.pos|e }}{% if r.score %} · 评分 {{ r.score|e }}{% endif %}{% for x in r.tags %}<span class="tagp mini {{ x.cls|e }}">{{ x.text|e }}</span>{% endfor %}</small></div>
           <div><b>{{ r.kda|e }}</b>{% if r.kp %} <span class="muted">({{ r.kp|e }})</span>{% endif %}<small><span class="{{ r.ratio_cls|e }}">{{ r.ratio|e }} KDA</span></small></div>
           <div class="bar"><span>{{ r.dmg|e }}</span><div class="track"><i class="o" style="width: {{ r.dmg_w }}%"></i></div><span>{{ r.taken|e }}</span><div class="track"><i class="b" style="width: {{ r.taken_w }}%"></i></div></div>
           <div><b>{{ r.cs }}</b> <span class="muted">补兵</span><small>{{ r.cspm|e }} / 分钟</small></div>
           <div><b>{{ r.gold|e }}</b><small>{{ r.goldpm|e }} / 分钟</small></div>
-          <div class="tp-items">{% for u in r["items"] %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>
+          <div class="trow-items">{% for u in r["items"] %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>
         </div>
         {% endfor %}
       </div>

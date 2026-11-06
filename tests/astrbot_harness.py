@@ -201,6 +201,8 @@ async def main() -> int:
         ("lol 英雄 快乐风男 中单 -t", "lol_champion", "疾风剑豪"),
         ("lol 出装 盲僧 打野 -m", "lol_champion", "盲僧"),
         ("lol 英雄 亚索 无限火力 -t", "lol_champion", "暂不提供"),
+        ("lol 海克斯 亚索 -t", "lol_mayhem", "海克斯强化 · 棱彩"),
+        ("lol 英雄 盲僧 海克斯大乱斗 -t", "lol_champion", "海克斯大乱斗"),
         ("lol 梯队 中单 -i", "lol_tier", "<image"),
         ("lol 战绩 Hide on bush#KR1 kr -t", "lol_matches", "Hide on bush#KR1"),
         ("lol 战绩 -t", "lol_matches", "还没有绑定"),
