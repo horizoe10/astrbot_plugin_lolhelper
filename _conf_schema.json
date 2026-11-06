@@ -190,7 +190,7 @@
   "cn": {
     "description": "国服",
     "type": "object",
-    "hint": "AstrBot 与国服客户端在同一台 Windows 电脑上时无需任何设置；否则在游戏电脑运行 bridge/start_bridge.bat，并把显示的地址填到「远程国服代理」",
+    "hint": "AstrBot 与国服客户端在同一台 Windows 电脑上时无需设置；否则填写「远程国服代理」或「WeGame 凭证」任意一项",
     "items": {
       "enabled": {
         "description": "启用国服查询",
@@ -229,6 +229,13 @@
         "type": "string",
         "default": "",
         "hint": "留空 = 直接连接本机国服客户端。AstrBot 在服务器 / Docker 上时，填代理窗口显示的完整地址，例如 http://192.168.1.5:6198?token=xxxx"
+      },
+      "wegame_cookie": {
+        "description": "WeGame 凭证（可选）",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "客户端连不上时改用 WeGame 查国服。浏览器登录 wegame.com.cn 后，在开发者工具 → Application → Cookies 复制 tgp_id 和 tgp_ticket，按 tgp_id=…; tgp_ticket=… 填写（也可粘贴整串 Cookie）。凭证会过期，过期后重新复制；建议用小号"
       },
       "bridge_token": {
         "description": "远程国服代理 Token（旧版）",

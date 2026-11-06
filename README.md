@@ -113,13 +113,14 @@ flowchart LR
 
 ## 🇨🇳 国服接入
 
-OP.GG 不收录国服，插件通过登录着的国服客户端查询（参考 League Akari 的 LCU + SGP 方案）。
+OP.GG 不收录国服，插件通过登录着的国服客户端（参考 League Akari 的 LCU + SGP 方案）或 WeGame 查询。
 
 ```mermaid
 flowchart LR
   B[🤖 联盟助手] --> Q{同一台电脑<br/>有国服客户端?}
   Q -->|是 · 内置| L[🎮 国服客户端 LCU]
   Q -->|否 · 远程代理| P[🧩 游戏电脑上的<br/>start_bridge.bat]
+  Q -.->|都连不上| W[🟦 WeGame 凭证]
   P --> L
   L -- 令牌 --> S[🛰️ SGP 战绩服务]
 ```
@@ -128,6 +129,12 @@ flowchart LR
 |---|---|
 | 🖥️ AstrBot 和国服客户端在同一台 Windows 电脑 | 什么都不用配，登录客户端即可 |
 | ☁️ AstrBot 在服务器 / Docker / NAS | 游戏电脑双击 `bridge/start_bridge.bat`，把窗口显示的地址（含 `?token=`）填到「国服 → 远程国服代理」 |
+| 🟦 没有常开的游戏电脑 | 浏览器登录 [wegame.com.cn](https://www.wegame.com.cn)，从 Cookie 复制 `tgp_id`、`tgp_ticket` 填到「国服 → WeGame 凭证」 |
+
+| 数据源 | 战绩 / 单局 | 段位 | 维护 |
+|---|:---:|:---:|---|
+| 🎮 客户端 | ✅ | ✅ 当前大区 | 客户端需保持登录 |
+| 🟦 WeGame | ✅ | ✅ 单双 / 灵活 | 凭证会过期，过期后 `/lol 国服状态` 会提示重新复制；玩家关闭战绩公开时查不到 |
 
 然后 `/lol 国服状态` 检查连接，`/lol 绑定国服 名字#编号 艾欧尼亚` 绑定账号。
 
@@ -135,14 +142,14 @@ flowchart LR
 
 ## ⚙️ 配置
 
-默认值开箱即用，WebUI 只显示常用的 17 项：
+默认值开箱即用，WebUI 只显示常用的 18 项：
 
 | 分组 | 配置项 |
 |---|---|
 | 🌐 网络 | 出站代理（国内访问 OP.GG 建议填写） |
 | 🖼️ 输出 | 默认输出方式 · 图片主题 · 支持 Markdown 的平台 |
 | 🔎 查询 | 外服默认大区 · 战绩默认场次 |
-| 🇨🇳 国服 | 启用 · 默认大区 · 远程国服代理（可选） |
+| 🇨🇳 国服 | 启用 · 默认大区 · 远程国服代理（可选） · WeGame 凭证（可选） |
 | 🏆 赛事 | 赛程默认赛事（未订阅的会话默认只看这些） |
 | 🔔 推送 | 启用 · 新对局检查间隔 · 开赛提醒 · 赛果附带每局数据 · 日报时刻 · 仅管理员订阅 |
 | 🏷️ 别名 | 英雄自定义别名 |
@@ -172,6 +179,7 @@ lolhelper/            核心包（不依赖 AstrBot）
   service.py tft.py game.py 查询与视图
   esports.py                赛事每局数据（esports.op.gg）
   cn.py                     国服代理客户端
+  wegame.py                 国服 WeGame 数据源
   render/ doc.py            文本 / Markdown / HTML / 图片渲染
   facade.py push.py
 templates/card.html   图片模板
@@ -186,6 +194,7 @@ bridge/               国服远程代理（零依赖，插件也直接内置调�
 - 🚫 云顶个人战绩：OP.GG MCP 未提供接口
 - 🛡️ “护盾”标签仅国服数据有
 - 🎬 赛况数据来自 esports.op.gg 网页接口（无公开文档），接口变动时自动退回只显示比分
+- 🟦 WeGame 数据源使用网页接口（无公开文档），凭证需定期更新；请使用小号凭证
 
 ---
 

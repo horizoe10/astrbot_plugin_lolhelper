@@ -70,6 +70,7 @@ CN_SERVERS: dict[str, tuple[str, str]] = {
     "TENCENT_TJ100": ("联盟四区", "https://tj100-sgp.lol.qq.com:21019"),
     "TENCENT_TJ101": ("联盟五区", "https://tj101-sgp.lol.qq.com:21019"),
     "TENCENT_BGP2": ("峡谷之巅", "https://bgp2-k8s-sgp.lol.qq.com:21019"),
+    "TENCENT_BGP3": ("海斗之巅", ""),  # seen in WeGame's area list; SGP address unknown
     "TENCENT_PBE": ("体验服", "https://pbe-sgp.lol.qq.com:21019"),
 }
 

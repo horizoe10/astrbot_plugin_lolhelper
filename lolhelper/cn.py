@@ -10,9 +10,10 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import logging
+import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import aiohttp
@@ -246,46 +247,159 @@ QUEUE_NAMES = {
 
 
 class CnService:
-    def __init__(self, bridge: CnBridgeClient, svc: OpggService, logger: logging.Logger | None = None):
+    """China server queries. Data source order: League client (built-in / remote bridge), then WeGame."""
+
+    def __init__(self, bridge: CnBridgeClient, svc: OpggService, logger: logging.Logger | None = None,
+                 wegame: "WeGameClient | None" = None):
+        from .wegame import WeGameClient
+
         self.bridge = bridge
         self.svc = svc
         self.gd = svc.gd
         self.logger = logger or logging.getLogger("lolhelper")
+        self.wg = wegame or WeGameClient(None)
+        self._ids: dict[tuple, Any] = {}  # (kind, name, tag, server) -> puuid / (openid, area)
 
+    # ------------------------------------------------------------- sources
+    def sources(self) -> list[str]:
+        if not self.wg.configured:
+            return ["client"]
+        if self.bridge.mode == "builtin" and os.name != "nt":
+            return ["wegame"]  # no League client can run here
+        return ["client", "wegame"]
+
+    async def _run(self, what: str, ops: dict[str, Callable[[], Awaitable[Any]]]) -> tuple[str, Any]:
+        errors: list[str] = []
+        for src in self.sources():
+            try:
+                return src, await ops[src]()
+            except NotFoundError:
+                raise
+            except BridgeError as exc:
+                errors.append(str(exc))
+                self.logger.info(f"[lolhelper] 国服{what}（{'客户端' if src == 'client' else 'WeGame'}）失败：{exc}")
+        if len(errors) > 1:
+            raise BridgeError("客户端：" + errors[0] + "\nWeGame：" + errors[1])
+        raise BridgeError(errors[0] if errors else "没有可用的国服数据源")
+
+    async def _wg_ids(self, account: dict) -> tuple[str, int]:
+        from .wegame import wg_server
+
+        if account.get("wg_openid"):
+            return account["wg_openid"], int(account.get("wg_area") or 0)
+        key = ("wg", account.get("game_name"), str(account.get("tag_line")), account.get("server"))
+        if key in self._ids:
+            return self._ids[key]
+        players = await self.wg.search(account.get("game_name") or "", str(account.get("tag_line") or ""))
+        same = [p for p in players if wg_server(p.get("area")) == account.get("server")] or players
+        if not same:
+            raise NotFoundError(f"WeGame 没有找到 {account.get('game_name')}#{account.get('tag_line')}")
+        p = max(same, key=lambda x: int(x.get("level") or 0))
+        self._ids[key] = (p.get("openid"), int(p.get("area") or 0))
+        return self._ids[key]
+
+    async def _puuid(self, account: dict) -> str:
+        if account.get("puuid"):
+            return account["puuid"]
+        key = ("puuid", account.get("game_name"), str(account.get("tag_line")))
+        if key not in self._ids:
+            hit = await self.bridge.lookup(account.get("game_name") or "", str(account.get("tag_line") or ""))
+            self._ids[key] = hit.get("puuid")
+        return self._ids[key]
+
+    async def _wg_detail(self, openid: str, area: int, game_id: str) -> dict:
+        raw, _ = await self.svc.cache.get_or_load(f"wg:game:{game_id}", 86400, lambda: self.wg.detail(openid, area, game_id))
+        return raw
+
+    # ------------------------------------------------------------- queries
     async def resolve_account(self, name: str, tag: str, server: str | None) -> dict:
-        hit = await self.bridge.lookup(name, tag)
-        if not server:
-            st = await self.bridge.status()
-            server = st.get("server") or ""
-        return {
-            "kind": "cn",
-            "server": server,
-            "puuid": hit.get("puuid"),
-            "game_name": hit.get("gameName") or name,
-            "tag_line": hit.get("tagLine") or tag,
-            "profile_icon": hit.get("profileIconId"),
-            "level": hit.get("summonerLevel"),
-        }
+        async def client():
+            hit = await self.bridge.lookup(name, tag)
+            srv = server
+            if not srv:
+                srv = (await self.bridge.status()).get("server") or ""
+            return {
+                "kind": "cn", "server": srv, "puuid": hit.get("puuid"),
+                "game_name": hit.get("gameName") or name, "tag_line": hit.get("tagLine") or tag,
+                "profile_icon": hit.get("profileIconId"), "level": hit.get("summonerLevel"),
+            }
+
+        async def wegame():
+            from .wegame import wg_server
+
+            players = await self.wg.search(name, tag)
+            if server:
+                players = [p for p in players if wg_server(p.get("area")) == server]
+            if not players:
+                where = f"（{cn_server_name(server)}）" if server else ""
+                raise NotFoundError(f"WeGame 没有找到 {name}#{tag}{where}")
+            p = max(players, key=lambda x: int(x.get("level") or 0))
+            return {
+                "kind": "cn", "server": wg_server(p.get("area")), "puuid": "",
+                "wg_openid": p.get("openid"), "wg_area": int(p.get("area") or 0),
+                "game_name": name, "tag_line": str(p.get("tag_num") or tag),
+                "profile_icon": p.get("icon_id"), "level": p.get("level"),
+            }
+
+        _, acc = await self._run("账号查询", {"client": client, "wegame": wegame})
+        return acc
 
     async def recent_matches(self, account: dict, count: int = 8) -> list[dict]:
         """Per-player entries of recent games; each keeps the full game under "_game"."""
         from .game import minimal_game, normalize_sgp_game, target_entry
+        from .wegame import normalize_wg_game, wg_list_entry
 
         await self.gd.ensure_lol()
-        payload = await self.bridge.matches(account["puuid"], account["server"], 0, count)
-        source = (payload or {}).get("source")
-        data = (payload or {}).get("data")
-        if source == "lcu":
-            entries = normalize_lcu_games(data, account["puuid"], self.gd)
-            for e in entries:
-                e["_game"] = minimal_game(e)
+
+        async def client():
+            puuid = await self._puuid(account)
+            payload = await self.bridge.matches(puuid, account["server"], 0, count)
+            source = (payload or {}).get("source")
+            data = (payload or {}).get("data")
+            if source == "lcu":
+                entries = normalize_lcu_games(data, puuid, self.gd)
+                for e in entries:
+                    e["_game"] = minimal_game(e)
+                return entries
+            entries = []
+            for g in (data or {}).get("games") or []:
+                entry = target_entry(normalize_sgp_game(g, puuid, self.gd))
+                if entry:
+                    entries.append(entry)
             return entries
-        entries = []
-        for g in (data or {}).get("games") or []:
-            entry = target_entry(normalize_sgp_game(g, account["puuid"], self.gd))
-            if entry:
-                entries.append(entry)
+
+        async def wegame():
+            openid, area = await self._wg_ids(account)
+            battles = await self.wg.battles(openid, area, 0, count)
+            if not self.svc.cfg.match_details:
+                return [wg_list_entry(b, self.gd) for b in battles]
+            details = await asyncio.gather(*(self._wg_detail(openid, area, b.get("game_id")) for b in battles),
+                                           return_exceptions=True)
+            entries = []
+            for b, d in zip(battles, details):
+                entry = target_entry(normalize_wg_game(d, openid, self.gd)) if isinstance(d, dict) and d else None
+                entries.append(entry or wg_list_entry(b, self.gd))
+            return entries
+
+        _, entries = await self._run("战绩查询", {"client": client, "wegame": wegame})
         return entries
+
+    async def ranked(self, account: dict) -> list[dict]:
+        from .wegame import wg_ranked
+
+        async def client():
+            return normalize_ranked(await self.bridge.ranked(await self._puuid(account), account.get("server") or ""))
+
+        async def wegame():
+            info = await self.wg.summoner_info(*(await self._wg_ids(account)))
+            if info.get("level"):
+                account["level"] = info["level"]
+            if info.get("icon_id"):
+                account["profile_icon"] = info["icon_id"]
+            return wg_ranked(info)
+
+        _, out = await self._run("段位查询", {"client": client, "wegame": wegame})
+        return out
 
     async def summoner(self, account: dict, count: int | None = None, detail: bool = False) -> View:
         await self.gd.ensure_lol()
@@ -294,8 +408,8 @@ class CnService:
         ranked: list[dict] = []
         ranked_err = ""
         try:
-            ranked = normalize_ranked(await self.bridge.ranked(account["puuid"], server))
-        except BridgeError as exc:
+            ranked = await self.ranked(account)
+        except (BridgeError, NotFoundError) as exc:
             ranked_err = str(exc)
             self.logger.info(f"[lolhelper] 国服段位查询失败：{exc}")
         matches = await self.recent_matches(account, count)
@@ -329,7 +443,8 @@ class CnService:
             )
         else:
             doc.add_text("", "没有查到最近的对局记录")
-        doc.footer = freshness(created) + " · 数据来自国服客户端"
+        from_wg = bool(matches) and str((matches[0].get("_game") or {}).get("source", "")).startswith("wegame")
+        doc.footer = freshness(created) + (" · 数据来自 WeGame" if from_wg else " · 数据来自国服客户端")
         plain = [{k: v for k, v in m.items() if k != "_game"} for m in matches]
         return View("cn_summoner", {"account": account, "ranked": ranked, "matches": plain}, doc, created)
 
@@ -343,26 +458,51 @@ class CnService:
     async def game_detail(self, account: dict, index: int = 1) -> View:
         from .errors import UsageError
         from .game import build_game_view, normalize_sgp_game
+        from .wegame import normalize_wg_game
 
         matches = await self.recent_matches(account, max(index, 5))
         if not 1 <= index <= len(matches):
             raise UsageError(f"只找到最近 {len(matches)} 场对局，序号需要在 1~{len(matches)} 之间")
         m = matches[index - 1]
         game = m.get("_game") or {}
-        if game.get("source") == "sgp" and sum(len(t["players"]) for t in game.get("teams") or []) >= 2:
-            detail = game  # the SGP match list already carries every participant
+        full = sum(len(t["players"]) for t in game.get("teams") or []) >= 2
+        if game.get("source") in ("sgp", "wegame") and full:
+            detail = game  # already carries every participant
+        elif str(game.get("source")).startswith("wegame"):
+            openid, area = await self._wg_ids(account)
+            detail = normalize_wg_game(await self._wg_detail(openid, area, m["id"]), openid, self.gd)
         else:
             payload = await self.bridge.game(m["id"], account.get("server") or "")
             raw = (payload or {}).get("data") or {}
-            detail = normalize_sgp_game(raw, account["puuid"], self.gd)
+            detail = normalize_sgp_game(raw, await self._puuid(account), self.gd)
         if not any(t["players"] for t in detail["teams"]):
-            raise BridgeError("国服代理没有返回这局的玩家数据")
-        return build_game_view(detail, self.gd, "cn", self.svc.cfg.timezone)
+            raise BridgeError("没有返回这局的玩家数据")
+        view = build_game_view(detail, self.gd, "cn", self.svc.cfg.timezone)
+        if detail.get("source") == "wegame":
+            view.doc.footer = view.doc.footer.replace("数据来自国服客户端", "数据来自 WeGame")
+            if "WeGame" not in view.doc.footer:
+                view.doc.footer += " · 数据来自 WeGame"
+        return view
 
     async def status_view(self) -> View:
-        st = await self.bridge.status()
+        try:
+            st = await self.bridge.status()
+        except BridgeError as exc:
+            st = {"connected": False, "error": str(exc)}
+        wg_state = "未配置"
+        if self.wg.configured:
+            try:
+                await self.wg.search("Uzi")
+                wg_state = "正常"
+            except BridgeError as exc:
+                wg_state = "已过期，请更新" if self.wg.expired else f"异常：{exc}"
         doc = Doc(title="国服连接状态", subtitle=self.bridge.label, theme="cn")
-        doc.badge("已连接客户端" if st.get("connected") else "未连接客户端", "win" if st.get("connected") else "lose")
+        if st.get("connected"):
+            doc.badge("已连接客户端", "win")
+        elif wg_state == "正常":
+            doc.badge("使用 WeGame", "win")
+        else:
+            doc.badge("未连接客户端", "lose")
         cur = st.get("current") or {}
         doc.add_kv(
             "",
@@ -375,9 +515,10 @@ class CnService:
                 ("会话令牌", "正常" if st.get("token_league-session") else "缺失"),
                 ("检测方式", st.get("source")),
                 ("错误", st.get("error")),
+                ("WeGame 凭证", wg_state),
+                ("查询顺序", " → ".join("客户端" if s == "client" else "WeGame" for s in self.sources())),
             ],
         )
-        if not st.get("connected") and self.bridge.mode == "builtin":
-            doc.add_text("", REMOTE_HINT)
-        return View("cn_status", st, doc, time.time())
-
+        if not st.get("connected") and wg_state != "正常":
+            doc.add_text("", REMOTE_HINT + "；或在「国服 → WeGame 凭证」填写 WeGame 登录凭证")
+        return View("cn_status", {**st, "wegame": wg_state}, doc, time.time())

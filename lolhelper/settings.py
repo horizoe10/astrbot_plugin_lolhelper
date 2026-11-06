@@ -79,6 +79,7 @@ class Settings:
     cn_enabled: bool = True
     cn_bridge_url: str = ""
     cn_bridge_token: str = ""
+    cn_wegame_cookie: str = ""
     cn_timeout: float = 15
     cn_default_server: str = ""
     cn_servers_extra: dict[str, tuple[str, str]] = field(default_factory=dict)
@@ -145,6 +146,7 @@ class Settings:
         s.cn_enabled = bool(g(cn, "enabled", s.cn_enabled))
         s.cn_bridge_url = str(g(cn, "bridge_url", s.cn_bridge_url)).strip()
         s.cn_bridge_token = str(g(cn, "bridge_token", "")).strip()
+        s.cn_wegame_cookie = str(g(cn, "wegame_cookie", "")).strip()
         if s.cn_bridge_url.rstrip("/") in ("http://127.0.0.1:6198", "http://localhost:6198") and not s.cn_bridge_token \
                 and "token=" not in s.cn_bridge_url:
             s.cn_bridge_url = ""  # old default address without a token: use the built-in connection

@@ -16,7 +16,8 @@ EMPTY = {"version": 1, "bindings": {}, "prefs": {}, "subs": [], "push_state": {}
 
 def account_key(acc: dict) -> str:
     if acc.get("kind") == "cn":
-        return f"cn:{acc.get('server', '')}:{acc.get('puuid', '')}"
+        ident = acc.get("puuid") or (f"wg:{acc['wg_openid']}" if acc.get("wg_openid") else "")
+        return f"cn:{acc.get('server', '')}:{ident}"
     return f"g:{acc.get('region', '')}:{str(acc.get('game_name', '')).lower()}#{str(acc.get('tag_line', '')).lower()}"
 
 

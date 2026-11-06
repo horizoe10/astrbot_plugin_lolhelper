@@ -23,6 +23,7 @@ from .render.image import ImageRenderer
 from .service import OpggService, ServiceConfig, View
 from .settings import Settings
 from .esports import EsportsClient
+from .wegame import WeGameClient
 from .storage import StateStore, sub_league_list
 from .tft import TftService
 from .fmt import set_default_tz
@@ -73,7 +74,8 @@ class Facade:
         self.tft = TftService(self.svc)
         self.svc.esp = EsportsClient(self.http)
         self.bridge = CnBridgeClient(self.http, settings.cn_bridge_url, settings.cn_bridge_token, settings.cn_timeout, logger=self.logger)
-        self.cn = CnService(self.bridge, self.svc, self.logger)
+        self.wegame = WeGameClient(self.http, settings.cn_wegame_cookie, settings.cn_timeout, self.logger)
+        self.cn = CnService(self.bridge, self.svc, self.logger, self.wegame)
         self.store = StateStore(self.data_dir / "state.json")
         self.images = ImageRenderer(
             self.data_dir / "render",

@@ -421,7 +421,7 @@
     {% if s.note %}<div class="note">{{ s.note|e }}</div>{% endif %}
   </div>
   {% endfor %}
-  <div class="foot"><span>{{ doc.footer|e }}</span><span>联盟助手 · 数据来源 OP.GG</span></div>
+  <div class="foot"><span>{{ doc.footer|e }}</span><span>联盟助手 · 数据来源 {% if 'WeGame' in doc.footer %}WeGame{% elif doc.theme == 'cn' %}国服客户端{% else %}OP.GG{% endif %}</span></div>
 </div>
 </body>
 </html>
