@@ -211,13 +211,17 @@ def build_series_view(g: dict, games: list[dict], gd: GameData, tz: str, created
                       headline: str = "", key: str = ""):
     from .doc import Doc
     from .fmt import freshness
-    from .service import View, versus_row
+    from .constants import stage_zh
+    from .service import View, league_theme, versus_row
 
     home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
     h, a = home.get("acronym") or home.get("name") or "待定", away.get("acronym") or away.get("name") or "待定"
-    stage = str(g.get("name") or "").split(":")[0].strip()
-    doc = Doc(title=f"{h} vs {a}", subtitle=" · ".join(x for x in [g.get("league") or "", stage] if x),
-              icon=home.get("image_url"), theme="esports", width=920)
+    stage = stage_zh(str(g.get("name") or "").split(":")[0].strip())
+    doc = Doc(title=f"{h} vs {a}", theme="esports", width=920)
+    info = league_theme(doc, g.get("league"))
+    doc.subtitle = " · ".join(x for x in [info["full"], stage] if x)
+    if not doc.icon:
+        doc.icon, doc.icon_logo = home.get("image_url"), True
     if headline:
         doc.badge(headline, "accent")
     row, line = versus_row(g, tz)
@@ -243,8 +247,10 @@ def build_series_view(g: dict, games: list[dict], gd: GameData, tz: str, created
 
 
 def build_esports_game_view(g: dict, game: dict, gd: GameData, tz: str, created: float):
+    from .constants import stage_zh
     from .fmt import duration, local_time
     from .game import build_game_view
+    from .service import league_theme
 
     n = normalize_esports_game(game, gd)
     view = build_game_view(n, gd, "esports", tz, created)
@@ -252,12 +258,14 @@ def build_esports_game_view(g: dict, game: dict, gd: GameData, tz: str, created:
     ht, at = _pick_sides(n, str(home.get("id") or ""), home.get("acronym") or "")
     win_t = ht if ht["win"] else at if at["win"] else None
     head = f"{win_t['label']} 胜" if win_t else "进行中"
-    stage = str(g.get("name") or "").split(":")[0].strip()
+    stage = stage_zh(str(g.get("name") or "").split(":")[0].strip())
+    info = league_theme(view.doc, g.get("league"))
     view.doc.title = f"{head} · 第{n.get('set')}局 · {duration(n.get('duration'))}"
     view.doc.subtitle = " · ".join(x for x in [
-        f"{ht['label']} vs {at['label']}", g.get("league") or "", stage, local_time(n.get("created_at"), tz, "%Y-%m-%d %H:%M"),
+        f"{ht['label']} vs {at['label']}", info["full"], stage, local_time(n.get("created_at"), tz, "%Y-%m-%d %H:%M"),
     ] if x)
-    view.doc.icon = (win_t or ht).get("logo")
+    if not info["logo"]:
+        view.doc.icon, view.doc.icon_logo = (win_t or ht).get("logo"), True
     view.doc.link = g.get("details") or ""
     view.kind = "lol_esports_game"
     return view

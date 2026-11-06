@@ -12,6 +12,8 @@ from urllib.parse import quote
 from .cache import TTLCache
 from .constants import (
     GAME_MODES,
+    league_info,
+    stage_zh,
     OPGG_REGIONS,
     POSITION_FROM_API,
     POSITIONS,
@@ -110,11 +112,21 @@ def _lane_fields(positions: list[str]) -> list[str]:
 
 
 LIVE_STATUS = ("RUNNING", "IN_PROGRESS", "LIVE", "STARTED")
-LEAGUE_LABEL = {"worlds": "Worlds", "first stand": "First Stand", "fst": "First Stand", "lta south": "LTA South", "lta north": "LTA North"}
 
 
 def league_label(key: str) -> str:
-    return LEAGUE_LABEL.get(key, key.upper())
+    info = league_info(key)
+    return info["short"] if info["color"] else key.upper()
+
+
+def league_theme(doc: Doc, league: str | None) -> dict:
+    """Use the league's logo (uncropped) and theme color for a card; returns the league info."""
+    info = league_info(league)
+    if info["logo"]:
+        doc.icon, doc.icon_logo = info["logo"], True
+    if info["color"]:
+        doc.accent = info["color"]
+    return info
 
 
 def versus_row(g: dict, tz: str) -> tuple[dict, str]:
@@ -134,14 +146,16 @@ def versus_row(g: dict, tz: str) -> tuple[dict, str]:
     a_name = away.get("acronym") or away.get("name") or "待定"
     when = local_time(g.get("scheduledAt"), tz)
     bo = f"BO{g.get('numberOfGames')}" if g.get("numberOfGames") else ""
-    stage = str(g.get("name") or "").split(":")[0].strip()
+    stage = stage_zh(str(g.get("name") or "").split(":")[0].strip())
+    info = league_info(g.get("league"))
     row = {
-        "time": when, "league": g.get("league") or "", "stage": stage, "bo": bo, "state": state,
+        "time": when, "league": info["short"], "league_icon": info["logo"], "league_color": info["color"],
+        "stage": stage, "bo": bo, "state": state,
         "score": score, "score_cls": score_cls,
         "home": {"name": h_name, "logo": home.get("image_url"), "win": home_win, "lose": away_win},
         "away": {"name": a_name, "logo": away.get("image_url"), "win": away_win, "lose": home_win},
     }
-    return row, " ".join(x for x in [when, g.get("league") or "", h_name, score, a_name, bo, state] if x)
+    return row, " ".join(x for x in [when, info["short"], stage, h_name, score, a_name, bo, state] if x)
 
 
 def rank_tile(queue: str, tier_s: str, wins: int, losses: int, emblem: str | None) -> Cell:
@@ -710,8 +724,14 @@ class OpggService:
     async def esports(self, mode: str = "schedule", league: str | list[str] | None = None, limit: int = 10) -> View:
         leagues = [league] if isinstance(league, str) else list(league or [])
         games, created = await self.esports_games(mode, leagues)
-        title = ("赛果" if mode == "result" else "赛程") + (" · " + " / ".join(league_label(x) for x in leagues) if leagues else "")
-        doc = Doc(title=f"英雄联盟{title}", subtitle="时间为北京时间" if self.cfg.timezone == "Asia/Shanghai" else self.cfg.timezone, theme="esports")
+        kind = "赛果" if mode == "result" else "赛程"
+        tz_note = "时间为北京时间" if self.cfg.timezone == "Asia/Shanghai" else self.cfg.timezone
+        if len(leagues) == 1:
+            doc = Doc(title=f"{league_info(leagues[0])['full']} · {kind}", subtitle=tz_note, theme="esports")
+            league_theme(doc, leagues[0])
+        else:
+            names = " / ".join(league_label(x) for x in leagues)
+            doc = Doc(title=f"英雄联盟{kind}" + (f" · {names}" if names else ""), subtitle=tz_note, theme="esports")
         rows, vs_rows, lines = [], [], []
         for i, g in enumerate(games[:limit], 1):
             row, line = versus_row(g, self.cfg.timezone)
@@ -783,11 +803,13 @@ class OpggService:
             raise NotFoundError(f"没有找到 {league.upper()} 的积分榜")
         lg, serie, tour = raw.get("league") or {}, raw.get("serie") or {}, raw.get("tournament") or {}
         doc = Doc(
-            title=f"{lg.get('shortName') or league.upper()} 积分榜",
-            subtitle=" ".join(str(x) for x in [serie.get("year"), serie.get("season"), tour.get("name")] if x),
+            title=f"{league_info(lg.get('shortName') or league)['full']} 积分榜",
+            subtitle=" ".join(str(x) for x in [serie.get("year"), serie.get("season"), stage_zh(tour.get("name"))] if x),
             icon=lg.get("imageUrl"),
+            icon_logo=True,
             theme="esports",
         )
+        league_theme(doc, lg.get("shortName") or league)
         rows = []
         for s in raw["standings"]:
             team = s.get("team") or {}

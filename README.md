@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="logo.png" width="140" alt="联盟助手">
+<img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/logo.png" width="140" alt="联盟助手">
 
 # 联盟助手
 
@@ -21,9 +21,9 @@
 
 | 📜 战绩列表 | ⚔️ 单局详情 |
 |:---:|:---:|
-| <img src="docs/preview/matches.jpg" width="380"> | <img src="docs/preview/game.jpg" width="380"> |
+| <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/matches.jpg" width="380"> | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/game.jpg" width="380"> |
 | **📈 版本梯队** | **♟️ 云顶阵容** |
-| <img src="docs/preview/tier.jpg" width="380"> | <img src="docs/preview/tft-deck.jpg" width="380"> |
+| <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tier.jpg" width="380"> | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tft-deck.jpg" width="380"> |
 
 ## ✨ 功能
 

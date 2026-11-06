@@ -268,3 +268,79 @@ def resolve_league(token: str) -> str | None:
         return t
     return ESPORTS_LEAGUE_ALIASES.get(t)
 
+
+
+# --------------------------------------------------------------- esports leagues
+_SYM = "https://s-qwer.op.gg/images/symbols/"
+_LG = "https://s-qwer.op.gg/images/lol/leagues/"
+# key -> (short Chinese name, full Chinese name, theme color, logo for dark backgrounds)
+LEAGUE_INFO: dict[str, tuple[str, str, str, str]] = {
+    "worlds": ("全球总决赛", "英雄联盟全球总决赛", "#3b7bff", _SYM + "WORLD@white.png"),
+    "msi": ("季中冠军赛", "英雄联盟季中冠军赛", "#d4a73c", _SYM + "MSI@white.png"),
+    "first stand": ("先锋赛", "英雄联盟先锋赛", "#f07a28", _LG + "141_1783606937219.png"),
+    "ewc": ("电竞世界杯", "电竞世界杯", "#22c55e", _SYM + "EWC.png"),
+    "lpl": ("LPL", "LPL 中国职业联赛", "#e5262f", _SYM + "LPL@white.png"),
+    "lck": ("LCK", "LCK 韩国冠军联赛", "#19c3e6", _SYM + "LCK@white.png"),
+    "lec": ("LEC", "LEC 欧洲冠军联赛", "#14d9b8", _SYM + "LEC@white.png"),
+    "lcs": ("LCS", "LCS 北美冠军联赛", "#6a7dff", _SYM + "LCS@white.png"),
+    "lcp": ("LCP", "LCP 亚太冠军联赛", "#ff5a8a", _LG + "138_1783606935767.png"),
+    "lta north": ("LTA 北区", "LTA 美洲冠军联赛 · 北区", "#f5a623", _LG + "140_1783606938094.png"),
+    "lta south": ("LTA 南区", "LTA 美洲冠军联赛 · 南区", "#f5a623", _LG + "139_1783606939593.png"),
+    "cblol": ("CBLOL", "CBLOL 巴西联赛", "#84cc16", _SYM + "CBLOL@white.png"),
+    "vcs": ("VCS", "VCS 越南联赛", "#facc15", _SYM + "VCS@white.png"),
+    "ljl": ("LJL", "LJL 日本联赛", "#e11d48", _SYM + "LJL@white.png"),
+    "kespa": ("KeSPA 杯", "KeSPA 杯", "#3b82f6", _SYM + "KESPA.png"),
+    "al": ("AL", "AL 阿拉伯联赛", "#0ea5a4", _SYM + "AL.png"),
+    "tcl": ("TCL", "TCL 土耳其联赛", "#ef4444", _SYM + "TCL@white.png"),
+}
+_LEAGUE_KEY_ALIAS = {"fst": "first stand", "world championship": "worlds", "mid-season invitational": "msi"}
+
+
+def league_info(name: str | None) -> dict:
+    """Display info for a league name as returned by OP.GG ("Worlds", "LPL", "LTA North" ...)."""
+    raw = str(name or "").strip()
+    key = raw.lower()
+    key = _LEAGUE_KEY_ALIAS.get(key, key)
+    info = LEAGUE_INFO.get(key)
+    if not info:
+        return {"key": key, "short": raw, "full": raw, "color": "", "logo": None}
+    short, full, color, logo = info
+    return {"key": key, "short": short, "full": full, "color": color, "logo": logo}
+
+
+_STAGE_RULES: list[tuple[str, str]] = [
+    (r"\bgrand finals?\b", "总决赛"),
+    (r"\b(upper|winners?)\s+bracket\b", "胜者组"),
+    (r"\b(lower|losers?)\s+bracket\b", "败者组"),
+    (r"\bquarter-?finals?\b", "八强赛"),
+    (r"\bsemi-?finals?\b", "半决赛"),
+    (r"\bfinals?\b", "决赛"),
+    (r"\bplay-?ins?\b", "入围赛"),
+    (r"\bplay-?offs?\b", "季后赛"),
+    (r"\bswiss stage\b", "瑞士轮"),
+    (r"\bswiss\b", "瑞士轮"),
+    (r"\s*\bstage\b", ""),
+    (r"\bregional merit match\b", "区域资格赛"),
+    (r"\btie-?breakers?\b", "加赛"),
+    (r"\bqualifiers?\b", "资格赛"),
+    (r"\bregular season\b", "常规赛"),
+    (r"\bsplit\s+(\d+)\b", r"第\1赛段"),
+    (r"\bspring\b", "春季赛"),
+    (r"\bsummer\b", "夏季赛"),
+    (r"\bgroup\s+([a-z])\b", r"\1 组"),
+    (r"\bround\s+(\d+)\b", r"第\1轮"),
+    (r"\bweek\s+(\d+)\b", r"第\1周"),
+    (r"\bday\s+(\d+)\b", r"第\1天"),
+    (r"\bmatch\s+(\d+)\b", r"第\1场"),
+]
+
+
+def stage_zh(stage: str | None) -> str:
+    """Translate OP.GG stage names, e.g. "Quarterfinal 1" -> "八强赛 第1场"."""
+    import re
+
+    s = str(stage or "").strip()
+    for pat, rep in _STAGE_RULES:
+        s = re.sub(pat, rep, s, flags=re.I)
+    s = re.sub(r"(八强赛|半决赛|决赛|总决赛)\s*(\d+)$", r"\1 第\2场", s)
+    return re.sub(r"\s{2,}", " ", s).strip()

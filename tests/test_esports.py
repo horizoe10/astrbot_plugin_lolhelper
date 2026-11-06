@@ -1,6 +1,16 @@
 from lolhelper.args import parse_leagues
+from lolhelper.constants import league_info, stage_zh
 from lolhelper.esports import normalize_esports_game, series_row
 from lolhelper.storage import sub_league_list
+
+
+def test_league_info_and_stage_names():
+    assert league_info("Worlds")["short"] == "全球总决赛" and league_info("Worlds")["color"]
+    assert league_info("LPL")["color"] != league_info("Worlds")["color"]
+    assert league_info("Unknown Cup") == {"key": "unknown cup", "short": "Unknown Cup", "full": "Unknown Cup", "color": "", "logo": None}
+    assert stage_zh("Quarterfinal 1") == "八强赛 第1场"
+    assert stage_zh("Lower Bracket Final") == "败者组 决赛"
+    assert stage_zh("Split 3 Playoffs") == "第3赛段 季后赛"
 
 
 def test_parse_leagues_multi_and_aliases():

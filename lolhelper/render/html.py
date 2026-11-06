@@ -31,8 +31,21 @@ def load_template() -> str:
 
 def template_data(doc: Doc, theme: str = "dark", max_rows: int = 0, width: int = 760) -> dict[str, Any]:
     palette = dict(THEMES.get(theme, THEMES["dark"]))
-    palette["accent"] = ACCENTS.get(doc.theme, ACCENTS["lol"])
-    return {"doc": limited(doc, max_rows).to_dict(), "c": palette, "width": doc.width or width}
+    palette["accent"] = doc.accent or ACCENTS.get(doc.theme, ACCENTS["lol"])
+    data = limited(doc, max_rows).to_dict()
+    if theme == "light":  # OP.GG league symbols come in @white (dark bg) and @black (light bg)
+        data = _swap_logos(data)
+    return {"doc": data, "c": palette, "width": doc.width or width}
+
+
+def _swap_logos(v: Any) -> Any:
+    if isinstance(v, str):
+        return v.replace("@white.png", "@black.png") if "/images/symbols/" in v else v
+    if isinstance(v, dict):
+        return {k: _swap_logos(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_swap_logos(x) for x in v]
+    return v
 
 
 def render_html(doc: Doc, theme: str = "dark", max_rows: int = 0, width: int = 760) -> str:

@@ -16,6 +16,7 @@
   .head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 3px solid {{ c.accent }};
           background: linear-gradient(120deg, {{ c.accent }}33, transparent 70%); }
   .head img { width: 64px; height: 64px; border-radius: 12px; border: 2px solid {{ c.accent }}; object-fit: cover; }
+  .head img.logo { object-fit: contain; padding: 8px; background: {{ c.accent }}1f; box-sizing: border-box; }
   .head h1 { font-size: 24px; font-weight: 700; letter-spacing: .5px; }
   .head .sub { color: {{ c.muted }}; margin-top: 4px; font-size: 14px; }
   .badges { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px 0; }
@@ -249,6 +250,8 @@
   .vs-s.todo { color: {{ c.muted }}; font-size: 18px; }
   .vs-sub { margin-top: 4px; font-size: 12px; color: {{ c.muted }}; }
   .vs-sub .live { color: #ff5d5d; font-weight: 700; }
+  .vs-lg { display: inline-flex; align-items: center; gap: 4px; vertical-align: -3px; }
+  .vs-lg img { width: auto; height: 18px; max-width: 46px; object-fit: contain; }
   .vs-no { display: inline-block; margin-right: 8px; padding: 0 7px; border-radius: 6px; background: {{ c.card }}; border: 1px solid {{ c.line }}; color: {{ c.text }}; font-weight: 700; }
   .ob { display: inline-flex; align-items: center; gap: 3px; margin-right: 8px; white-space: nowrap; }
   .ob img { width: 16px; height: 16px; object-fit: contain; }
@@ -284,7 +287,7 @@
 {% macro strip(imgs) %}<div class="strip">{% for u in imgs %}{% if u is mapping %}<img src="{{ u.src|e }}" class="{{ u.cls|e }}">{% else %}<img src="{{ u|e }}">{% endif %}{% endfor %}</div>{% endmacro %}
 <div class="card">
   <div class="head">
-    {% if doc.icon %}<img src="{{ doc.icon|e }}">{% endif %}
+    {% if doc.icon %}<img src="{{ doc.icon|e }}"{% if doc.icon_logo %} class="logo"{% endif %}>{% endif %}
     <div>
       <h1>{{ doc.title|e }}</h1>
       {% if doc.subtitle %}<div class="sub">{{ doc.subtitle|e }}</div>{% endif %}
@@ -391,7 +394,7 @@
     {% elif s.kind == "versus" %}
       {% for v in s.block.rows %}
       <div class="vs">
-        <div class="vs-top">{% if v.no %}<span class="vs-no">#{{ v.no }}</span>{% endif %}{{ v.time|e }}<b>{{ v.league|e }}</b>{{ v.stage|e }}</div>
+        <div class="vs-top">{% if v.no %}<span class="vs-no">#{{ v.no }}</span>{% endif %}{{ v.time|e }}<b class="vs-lg"{% if v.league_color %} style="color: {{ v.league_color|e }}"{% endif %}>{% if v.league_icon %}<img src="{{ v.league_icon|e }}">{% endif %}{{ v.league|e }}</b>{{ v.stage|e }}</div>
         <div class="vs-t h{% if v.home.win %} win{% elif v.home.lose %} lose{% endif %}"><span class="vs-n">{{ v.home.name|e }}</span><span class="vs-logo">{% if v.home.logo %}<img src="{{ v.home.logo|e }}">{% endif %}</span></div>
         <div class="vs-m"><span class="vs-s {{ v.score_cls|e }}">{{ v.score|e }}</span><div class="vs-sub">{{ v.bo|e }}{% if v.bo %} · {% endif %}<span class="{{ v.score_cls|e }}">{{ v.state|e }}</span></div></div>
         <div class="vs-t a{% if v.away.win %} win{% elif v.away.lose %} lose{% endif %}"><span class="vs-logo">{% if v.away.logo %}<img src="{{ v.away.logo|e }}">{% endif %}</span><span class="vs-n">{{ v.away.name|e }}</span></div>

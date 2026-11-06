@@ -56,6 +56,8 @@ class Doc:
     footer: str = ""
     link: str = ""
     width: int = 0  # image width override
+    accent: str = ""  # theme color override (e.g. per esports league)
+    icon_logo: bool = False  # icon is a transparent logo: show whole, no cropping
 
     # builders -----------------------------------------------------------------
     def badge(self, text: str, cls: str = "") -> "Doc":

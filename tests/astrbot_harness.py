@@ -226,7 +226,7 @@ async def main() -> int:
         ("lol 国服状态", "lol_cn_status", "已连接客户端"),
         ("lol 赛程 -t", "lol_schedule", "赛程"),
         ("lol 积分 LCK -t", "lol_standings", "积分榜"),
-        ("lol 赛果 S赛 LPL -t", "lol_results", "Worlds / LPL"),
+        ("lol 赛果 S赛 LPL -t", "lol_results", "全球总决赛 / LPL"),
         ("lol 赛况 worlds 1 -t", "lol_match", "每局数据"),
         ("lol 赛况 BLG 2 -t", "lol_match", "第2局"),
         ("lol 赛程 火星联赛", "lol_schedule", "未知联赛"),

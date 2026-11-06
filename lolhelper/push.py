@@ -11,7 +11,8 @@ from typing import Awaitable, Callable
 from .doc import Doc
 from .errors import LolHelperError
 from .fmt import get_tz, local_time, parse_time
-from .service import OpggService, View, versus_row
+from .constants import stage_zh
+from .service import OpggService, View, league_theme, versus_row
 from .storage import account_key, account_label, sub_league_list
 
 SendFn = Callable[[str, View], Awaitable[None]]
@@ -212,8 +213,12 @@ class PushManager:
     def esports_view(self, g: dict, headline: str) -> View:
         home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
         h, a = home.get("acronym") or home.get("name"), away.get("acronym") or away.get("name")
-        stage = str(g.get("name") or "").split(":")[0].strip()
-        doc = Doc(title=f"{h} vs {a}", subtitle=" · ".join(x for x in [g.get("league") or "", stage] if x), icon=home.get("image_url"), theme="esports")
+        stage = stage_zh(str(g.get("name") or "").split(":")[0].strip())
+        doc = Doc(title=f"{h} vs {a}", theme="esports")
+        info = league_theme(doc, g.get("league"))
+        doc.subtitle = " · ".join(x for x in [info["full"], stage] if x)
+        if not doc.icon:
+            doc.icon, doc.icon_logo = home.get("image_url"), True
         doc.badge(headline, "accent")
         row, line = versus_row(g, self.f.s.timezone)
         doc.add_block("", "versus", {"rows": [row]}, [line])
