@@ -27,6 +27,9 @@ from .lolhelper.settings import Settings
 from .lolhelper.service import league_label
 from .lolhelper.storage import account_label, sub_league_list
 
+# first words that start a plugin command (group names and aliases)
+ENTRY_WORDS = {"lol", "tft", "云顶"}
+
 MODE_ZH = {"text": "纯文本", "markdown": "Markdown", "image": "图片"}
 
 HELP = """联盟助手 v{version}
@@ -611,6 +614,55 @@ class LolHelperPlugin(Star):
             f"订阅总数：{len(self.f.store.data['subs'])}",
         ]
         yield self._plain(event, "\n".join(lines))
+
+    # ========================================================= compat entry
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def compat_entry(self, event: AstrMessageEvent):
+        """兼容入口：唤醒前缀为空（如 QQ 官方机器人）时，也能识别 /lol、／lol 以及不 @ 的「lol 子指令」"""
+        text = (event.get_message_str() or "").strip()
+        explicit = text[:1] in ("/", "／")
+        body = text.lstrip("/／").strip()
+        words = body.split()
+        if not words or words[0].lower() not in ENTRY_WORDS or event.get_extra("lolhelper_handled"):
+            return
+        if event.is_at_or_wake_command and not explicit:
+            return  # AstrBot's own command matching handles this one
+        handler = self._match_command(event, body)
+        if handler is None:
+            return
+        event.set_extra("lolhelper_handled", True)
+        original = event.message_str
+        event.message_str, event.is_at_or_wake_command = body, True
+        try:
+            async for result in getattr(self, handler.handler_name)(event):
+                yield result
+        finally:
+            event.message_str = original
+        event.stop_event()
+
+    def _match_command(self, event: AstrMessageEvent, body: str):
+        """The plugin's own sub-command handler matching the text, honouring permissions and WebUI switches."""
+        from astrbot.core.star.star_handler import star_handlers_registry
+
+        get_config = getattr(self.context, "get_config", None)
+        cfg = get_config(event.unified_msg_origin) if get_config else self.config
+        original, wake = event.message_str, event.is_at_or_wake_command
+        event.message_str, event.is_at_or_wake_command = body, True
+        try:
+            for h in star_handlers_registry:
+                if h.handler_module_path != self.__module__ or not h.enabled or h.handler_name == "compat_entry":
+                    continue
+                kinds = {type(f).__name__ for f in h.event_filters}
+                if "CommandFilter" not in kinds or "CommandGroupFilter" in kinds:
+                    continue
+                try:
+                    if all(f.filter(event, cfg) for f in h.event_filters):
+                        return h
+                except Exception:  # a filter we cannot evaluate here
+                    continue
+        finally:
+            event.message_str, event.is_at_or_wake_command = original, wake
+        return None
 
     # ============================================================ LLM tools
     @filter.llm_tool(name="lolhelper_champion_build")

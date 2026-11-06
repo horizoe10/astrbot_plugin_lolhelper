@@ -23,6 +23,8 @@ HtmlRenderFn = Callable[..., Awaitable[str]]
 FetchFn = Callable[[str], Awaitable[tuple[bytes, str] | None]]
 
 MAX_INLINE_BYTES = 400_000
+# The AstrBot text-to-image service renders on a fixed 800px-wide page; narrower cards leave a dark strip on the right.
+T2I_VIEWPORT_WIDTH = 800
 
 
 class ImageRenderError(Exception):
@@ -123,8 +125,10 @@ class ImageRenderer:
         except ImportError:
             self._playwright_ok = False
 
-    async def _data(self, doc: Doc) -> dict[str, Any]:
+    async def _data(self, doc: Doc, min_width: int = 0) -> dict[str, Any]:
         data = template_data(doc, self.theme, self.max_rows, self.width)
+        if min_width and data["width"] < min_width:
+            data["width"] = min_width  # fill the render service's fixed viewport: no empty strip on the right
         if self.inliner:
             try:
                 data["doc"] = await asyncio.wait_for(self.inliner.inline(data["doc"]), timeout=15)
@@ -154,7 +158,7 @@ class ImageRenderer:
         raise ImageRenderError("; ".join(errors) or "没有可用的图片渲染方式")
 
     async def _t2i(self, doc: Doc, umo: str | None, want_file: bool) -> str:
-        data = await self._data(doc)
+        data = await self._data(doc, T2I_VIEWPORT_WIDTH)
         options = {"full_page": True, "type": "jpeg", "quality": self.quality}
         try:
             return await self.html_render(load_template(), data, return_url=not want_file, options=options, umo=umo)

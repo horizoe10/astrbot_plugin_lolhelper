@@ -273,6 +273,24 @@ async def main() -> int:
     # remote CN bridge address with the token in the URL
     check(plugin.f.bridge.mode == "remote" and plugin.f.bridge.token == "tk", "remote cn address carries token")
 
+    # compat entry: empty wake prefix (QQ official bots) -> slash commands / bare commands without @
+    async def compat(text, woken):
+        ev = make_event(text)
+        ev.is_at_or_wake_command = woken
+        outs = [describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)]
+        return "\n".join(outs), ev.is_stopped()
+
+    out, stopped = await compat("/lol 帮助", False)
+    check("联盟助手" in out and stopped, "compat: /lol without @ works")
+    out, _ = await compat("lol 帮助", False)
+    check("联盟助手" in out, "compat: bare lol sub-command without @ works")
+    out, _ = await compat("／lol 大区", True)
+    check("外服" in out, "compat: @bot + full-width slash works")
+    out, _ = await compat("lol 笑死", False)
+    check(out == "", "compat: chat starting with lol is ignored")
+    out, _ = await compat("lol 帮助", True)
+    check(out == "", "compat: woken plain command left to AstrBot (no double reply)")
+
     await plugin.terminate()
     await runner.cleanup()
     print(f"\n{len(FAILS)} failure(s)")
