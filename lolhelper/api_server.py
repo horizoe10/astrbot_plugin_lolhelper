@@ -15,6 +15,7 @@ from typing import Awaitable, Callable
 
 from aiohttp import web
 
+from . import VERSION
 from .args import parse_leagues, parse_target
 from .constants import POSITION_ALIASES, resolve_league
 from .errors import BridgeError, NotFoundError, LolHelperError, UpstreamError, UsageError
@@ -79,7 +80,7 @@ class ApiServer:
             return web.json_response({"ok": False, "error": str(exc)}, status=status, dumps=_dumps)
 
     async def health(self, request: web.Request) -> web.Response:
-        return web.json_response({"ok": True, "version": "1.0", "tools": len(self.f.mcp.tools)})
+        return web.json_response({"ok": True, "version": VERSION, "tools": len(self.f.mcp.tools)})
 
     # ------------------------------------------------------------------- views
     async def build_view(self, path: str, q: dict) -> View:

@@ -11,9 +11,10 @@ from typing import Any
 
 import aiohttp
 
+from . import VERSION
 from .errors import UpstreamError
 
-DEFAULT_UA = "astrbot_plugin_lolhelper/1.0 (+https://github.com/horizoe10/astrbot_plugin_lolhelper)"
+DEFAULT_UA = f"astrbot_plugin_lolhelper/{VERSION} (+https://github.com/horizoe10/astrbot_plugin_lolhelper)"
 
 
 def make_ssl_context() -> ssl.SSLContext:

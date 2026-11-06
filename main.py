@@ -1,4 +1,4 @@
-"""AstrBot 联盟助手 (lolhelper) v1.0 — LoL / TFT data with text, Markdown and image output."""
+"""AstrBot 联盟助手 (lolhelper) — LoL / TFT data with text, Markdown and image output."""
 
 from __future__ import annotations
 

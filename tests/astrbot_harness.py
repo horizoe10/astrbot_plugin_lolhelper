@@ -237,7 +237,7 @@ async def main() -> int:
         ("tft 强化 贷款 -t", "tft_augment", "贷款"),
         ("tft 阵容 -i", "tft_meta", "<image"),
         ("lol 大区", "lol_regions", "艾欧尼亚"),
-        ("lol 状态", "lol_status", "联盟助手 v1.0"),
+        ("lol 状态", "lol_status", "联盟助手 v1.1"),
         ("lol 帮助", "lol_help", "/lol 英雄"),
     ]
     for text, want_handler, want in cases:

@@ -15,12 +15,13 @@ from typing import Any
 
 import aiohttp
 
+from . import VERSION
 from .dsl import parse_opgg_text
 from .errors import NotFoundError, UpstreamError
 from .net import HttpClient, RateLimiter, _backoff
 
 PROTOCOL_VERSION = "2025-06-18"
-CLIENT_INFO = {"name": "astrbot_plugin_lolhelper", "version": "1.0"}
+CLIENT_INFO = {"name": "astrbot_plugin_lolhelper", "version": VERSION}
 
 NOT_FOUND_HINTS = ("not found", "does not exist", "no data", "존재하지")
 

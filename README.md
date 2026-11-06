@@ -6,12 +6,12 @@
 
 **AstrBot 英雄联盟 / 云顶之弈数据插件**
 
-![version](https://img.shields.io/badge/version-1.0-C8AA6E)
+![version](https://img.shields.io/badge/version-1.1-C8AA6E)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10-0AC8B9)
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
 
-📊 OP.GG 数据 · 🖼️ 三种推送 · 🇨🇳 国服战绩 · 🔔 主动推送 · 🔌 本地接口
+📊 OP.GG 数据 · 🖼️ 三种推送 · 🇨🇳 国服战绩 · 🏆 赛事赛况 · 🔔 主动推送 · 🔌 本地接口
 
 </div>
 
@@ -24,6 +24,8 @@
 | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/matches.jpg" width="380"> | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/game.jpg" width="380"> |
 | **📈 版本梯队** | **♟️ 云顶阵容** |
 | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tier.jpg" width="380"> | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tft-deck.jpg" width="380"> |
+| **🎬 赛况（每局数据）** | **🏆 赛程（多赛事）** |
+| <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-match.jpg" width="380"> | <img src="https://cdn.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-schedule.jpg" width="380"> |
 
 ## ✨ 功能
 
@@ -34,7 +36,7 @@
 | 📈 | 分路梯队 · 胜率 / 登场 / 禁用 | 🗡️ | 英雄三件套（登顶率前三） |
 | 📜 | 战绩列表（10 人 · 参团 · 标签） | 🎒 | 装备适配英雄 |
 | ⚔️ | 单局详情（伤害 / 承伤条 · 出装） | 🔮 | 强化符文搜索 |
-| 🏆 | 电竞赛程 · 赛果 · 积分榜（多联赛合并） | | |
+| 🏆 | 电竞赛程 · 赛果 · 积分榜（多赛事合并） | | |
 | 🎬 | 赛况：每局阵容 · MVP · 资源 · 单局 10 人数据 | | |
 
 ## ⌨️ 指令
@@ -56,7 +58,37 @@
 | 🔔 订阅 | `/lol 订阅 战绩 \| 赛事 [联赛…] \| 梯队 \| 云顶` | `/lol 订阅 赛事 S赛 LPL` |
 | ⚙️ 设置 | `/lol 模式` · `大区` · `国服状态` · `状态` · `帮助` | `/lol 模式 图片` |
 
-英雄支持中文名、称号、外号和英文名（亚索 / 疾风剑豪 / 快乐风男 / Yasuo）。
+英雄支持中文名、称号、外号和英文名（亚索 / 疾风剑豪 / 快乐风男 / Yasuo）；赛事支持简称和中文（S赛 / 全球总决赛 / Worlds、季中赛 / MSI）。
+
+## 🏆 赛事
+
+```mermaid
+flowchart LR
+  S[🔔 /lol 订阅 赛事 S赛 LPL] --> F{本会话订阅的赛事}
+  F -->|开赛前| R[⏰ 开赛提醒]
+  F -->|比赛结束| D[🎬 赛果 + 每局数据]
+  F -->|不带参数查询| C[🏆 /lol 赛程 · 赛果<br/>只显示订阅的赛事]
+  C -->|序号| M[🎬 /lol 赛况 1]
+  M -->|局号| G[⚔️ /lol 赛况 1 2<br/>单局 10 人]
+```
+
+| 场景 | 指令 | 效果 |
+|---|---|---|
+| 🔔 只订阅部分赛事 | `/lol 订阅 赛事 S赛 LPL` | 只推送这两个赛事的开赛提醒和赛果 |
+| 🏆 合并查看 | `/lol 赛程 S赛 LPL` · `/lol 赛程 全部` | 多个赛事放进一张卡片 |
+| 🎬 整场赛况 | `/lol 赛况 1` · `/lol 赛况 BLG` | 每局阵容、击杀、塔 / 龙 / 男爵 / 经济、MVP |
+| ⚔️ 单局详情 | `/lol 赛况 BLG 2` | 双方 10 人符文、技能、出装、伤害承伤 |
+
+每个赛事有自己的图标和主题色，卡片标题使用中文全称：
+
+| 赛事 | 主题色 | 赛事 | 主题色 |
+|---|---|---|---|
+| 🌍 英雄联盟全球总决赛 | 🔵 蓝 | 🇨🇳 LPL 中国职业联赛 | 🔴 红 |
+| 🇰🇷 LCK 韩国冠军联赛 | 🩵 青 | 🇪🇺 LEC 欧洲冠军联赛 | 🟢 蓝绿 |
+| 🏅 季中冠军赛 | 🟡 金 | 🚩 先锋赛 | 🟠 橙 |
+| 🌏 LCP 亚太冠军联赛 | 🩷 粉 | 🌎 LTA 美洲冠军联赛 | 🟠 橙黄 |
+
+> 💡 赛果推送会等 OP.GG 发布每局数据后再发送，最多等待 40 分钟，超时则只推送比分。
 
 ## 🖨️ 推送方式
 
@@ -149,6 +181,7 @@ main.py               AstrBot 入口：指令 · LLM 工具 · 消息发送
 lolhelper/            核心包（不依赖 AstrBot）
   mcp_client.py dsl.py      OP.GG MCP 客户端与返回格式解析
   service.py tft.py game.py 查询与视图
+  esports.py                赛事每局数据（esports.op.gg）
   cn.py                     国服代理客户端
   render/ doc.py            文本 / Markdown / HTML / 图片渲染
   facade.py push.py api_server.py
@@ -163,8 +196,9 @@ bridge/               国服本地代理（零依赖）
 - 🚫 无限火力 / 极限闪击的英雄数据：OP.GG MCP 参数校验问题，暂不可用
 - 🚫 云顶个人战绩：OP.GG MCP 未提供接口
 - 🛡️ “护盾”标签仅国服数据有
+- 🎬 赛况数据来自 esports.op.gg 网页接口（无公开文档），接口变动时自动退回只显示比分
 
 ---
 
-<div align="center"><sub>数据来自 OP.GG · Data Dragon · CommunityDragon。本项目与 Riot Games、OP.GG 无关。</sub></div>
+<div align="center"><sub>数据来自 OP.GG · esports.op.gg · Data Dragon · CommunityDragon。本项目与 Riot Games、OP.GG 无关。</sub></div>
 
