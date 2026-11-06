@@ -85,7 +85,12 @@ class TftService:
                 pct(st.get("top4Rate")),
                 pct(st.get("winRate")),
             ])
-        doc.add_table("", ["#", "阵容", "评级", "均名", "前四", "登顶"], rows, note="金框 / ★ 为核心棋子；发送「/tft 阵容 序号」查看装备与运营")
+        doc.add_table("", ["#", "阵容", "评级", "均名", "前四", "登顶"], rows, note="金框 / ★ 为核心棋子")
+        doc.tip("/tft 阵容 1", "第 1 名阵容的装备、羁绊与运营")
+        top_units = [u for u in (shown[0].get("units") if shown else []) or [] if u.get("isCore")]
+        if top_units:
+            doc.tip(f"/tft 英雄 {self.gd.tft_champion_name(top_units[0]['key'])}", "核心英雄的最佳出装")
+        doc.tip("/tft 强化 贷款", "按关键词搜索强化符文")
         doc.footer = freshness(created)
         doc.link = "https://op.gg/tft/meta-trends/comps"
         return View("tft_meta", {"decks": decks[:limit], "metadata": meta}, doc, created)
@@ -141,6 +146,13 @@ class TftService:
                 Cell(" ".join(self.gd.tft_champion_name(u["key"]) for u in final_units), imgs=self._unit_icons(final_units), cls="bigstrip"),
             ])
         doc.add_table("运营过渡", [], stages)
+        if core:
+            doc.tip(f"/tft 英雄 {self.gd.tft_champion_name(core['key'])}", "核心英雄的最佳出装")
+            core_items = core.get("items") or []
+            if core_items:
+                doc.tip(f"/tft 装备 {self.gd.tft_item_name(core_items[0])}", "这件装备最适合给谁")
+        if index < len(decks):
+            doc.tip(f"/tft 阵容 {index + 1}", "下一个阵容")
         doc.footer = freshness(created)
         return View("tft_deck", d, doc, created)
 
@@ -184,6 +196,10 @@ class TftService:
                 big(b.get("itemCount")),
             ])
         doc.add_table("登顶率最高的出装", ["#", "装备", "登顶", "均名", "前四", "次数"], rows, note=f"仅统计出现 {min_count} 次以上的组合")
+        best_items = best.get("itemNames") or []
+        if best_items:
+            doc.tip(f"/tft 装备 {self.gd.tft_item_name(best_items[0])}", "这件装备最适合给谁")
+        doc.tip("/tft 阵容", "版本强势阵容")
         doc.footer = freshness(created)
         return View("tft_champion", {"champion": api, "builds": builds}, doc, created)
 
@@ -210,6 +226,9 @@ class TftService:
                 big(r.get("totalCount")),
             ])
         doc.add_table("携带英雄排行", ["英雄", "均名", "前四", "登顶", "次数"], rows)
+        if shown:
+            doc.tip(f"/tft 英雄 {self.gd.tft_champion_name(shown[0].get('characterId', ''))}", "排名第一的英雄出装")
+        doc.tip("/tft 阵容", "版本强势阵容")
         doc.footer = freshness(created)
         return View("tft_item", {"item": api, "champions": rows_raw}, doc, created)
 
@@ -239,6 +258,7 @@ class TftService:
                 for h in hits[:limit]
             ],
         )
+        doc.tip("/tft 阵容", "版本强势阵容")
         doc.footer = freshness(created)
         return View("tft_augment", {"query": query, "augments": hits[:limit]}, doc, created)
 

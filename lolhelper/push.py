@@ -132,7 +132,11 @@ class PushManager:
             width=880,
         )
         add_match_cards(doc, "", [game], self.f.gd)
-        doc.footer = f"对局时间 {local_time(m.get('created_at'), self.f.s.timezone)} · 发送「/lol 对局」查看详情"
+        doc.footer = f"对局时间 {local_time(m.get('created_at'), self.f.s.timezone)}"
+        doc.tip("/lol 对局", "这局的双方 10 人数据")
+        if m.get("champion_name"):
+            doc.tip(f"/lol 英雄 {str(m['champion_name']).split(' ')[0]}", "这个英雄的出装")
+        doc.tip("/lol 战绩", "最近战绩")
         match = {k: v for k, v in m.items() if k != "_game"}
         return View("push_match", {"account": account, "match": match}, doc, time.time())
 
@@ -224,6 +228,12 @@ class PushManager:
         doc.badge(headline, "accent")
         row, line = versus_row(g, self.f.s.timezone)
         doc.add_block("", "versus", {"rows": [row]}, [line])
+        ref = h or ""
+        if g.get("status") == "FINISHED":
+            doc.tip(f"/lol 赛况 {ref}", "每局阵容与数据")
+        else:
+            doc.tip(f"/lol 赛程 {info['short'] if info['color'] else ''}".rstrip(), "后续赛程")
+        doc.tip("/lol 订阅列表", "管理本群订阅")
         doc.link = g.get("details") or ""
         return View("push_esports", g, doc, time.time())
 

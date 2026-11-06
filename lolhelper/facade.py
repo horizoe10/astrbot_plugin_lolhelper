@@ -23,6 +23,7 @@ from .render.image import ImageRenderer
 from .service import OpggService, ServiceConfig, View
 from .settings import Settings
 from .esports import EsportsClient
+from .opgg_web import OpggWebClient
 from .wegame import WeGameClient
 from .storage import StateStore, sub_league_list
 from .tft import TftService
@@ -68,9 +69,12 @@ class Facade:
                 ttl_matches=settings.ttl_matches,
                 ttl_esports=settings.ttl_esports,
                 ttl_tft=settings.ttl_tft,
+                meta_region=settings.meta_region,
+                meta_tier=settings.meta_tier,
             ),
             self.logger,
         )
+        self.svc.web = OpggWebClient(self.http)
         self.tft = TftService(self.svc)
         self.svc.esp = EsportsClient(self.http)
         self.bridge = CnBridgeClient(self.http, settings.cn_bridge_url, settings.cn_bridge_token, settings.cn_timeout, logger=self.logger)
@@ -164,13 +168,14 @@ class Facade:
             return await self.cn.game_detail(account, index)
         return await self.svc.game_detail(account["game_name"], account["tag_line"], account.get("region"), index)
 
-    async def champion(self, query: str, position: str | None = None, mode: str | None = None) -> View:
-        return await self.svc.champion(query, position, mode)
+    async def champion(self, query: str, position: str | None = None, mode: str | None = None,
+                       region: str | None = None, tier: str | None = None) -> View:
+        return await self.svc.champion(query, position, mode, region, tier)
 
-    async def tier(self, position: str | None = None) -> View:
+    async def tier(self, position: str | None = None, region: str | None = None, tier: str | None = None) -> View:
         if position and position not in POSITIONS:
             raise UsageError("位置可选：上单 / 打野 / 中单 / 下路 / 辅助")
-        return await self.svc.tier(position, limit=max(self.s.text_max_rows, self.s.image_max_rows))
+        return await self.svc.tier(position, limit=max(self.s.text_max_rows, self.s.image_max_rows), region=region, tier=tier)
 
     async def esports(self, mode: str = "schedule", league: str | list[str] | None = None) -> View:
         return await self.svc.esports(mode, league, limit=max(self.s.text_max_rows, 12))
@@ -207,13 +212,18 @@ class Facade:
 
     # ---------------------------------------------------------------- rendering
     def text(self, view: View) -> str:
-        return render_text(view.doc, self.s.text_max_rows)
+        return render_text(self._tips(view.doc), self.s.text_max_rows)
 
     def markdown(self, view: View) -> str:
-        return render_markdown(view.doc, self.s.text_max_rows)
+        return render_markdown(self._tips(view.doc), self.s.text_max_rows)
 
     async def image(self, view: View, umo: str | None = None, want_file: bool = False) -> str:
-        return await self.images.render(view.doc, umo, want_file)
+        return await self.images.render(self._tips(view.doc), umo, want_file)
+
+    def _tips(self, doc):
+        if not self.s.show_tips:
+            doc.tips = []
+        return doc
 
     def resolve_mode(self, requested: str | None, umo: str | None, platform: str | None) -> str:
         mode = requested or (self.store.mode(umo) if umo else None) or self.s.default_mode

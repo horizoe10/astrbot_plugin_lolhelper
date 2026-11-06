@@ -61,7 +61,8 @@ def big(n) -> str:
     except (TypeError, ValueError):
         return "-"
     if v >= 10000:
-        return f"{v / 10000:.1f}万"
+        s = f"{v / 10000:.0f}" if v >= 1_000_000 else f"{v / 10000:.1f}"
+        return f"{s.rstrip('0').rstrip('.') if '.' in s else s}万"
     return str(int(v))
 
 

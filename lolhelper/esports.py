@@ -235,12 +235,15 @@ def build_series_view(g: dict, games: list[dict], gd: GameData, tz: str, created
         rows.append(r)
         lines.append(ln)
     if rows:
-        hint = f"发送「/lol 赛况 {key + ' ' if key else ''}局号」查看单局双方 10 人数据"
-        doc.add_block("每局数据", "series", {"rows": rows}, lines, note=hint)
+        doc.add_block("每局数据", "series", {"rows": rows}, lines)
+        ref = key or h
+        doc.tip(f"/lol 赛况 {ref} 1", "第 1 局双方 10 人数据")
     elif str(g.get("status") or "").upper() == "FINISHED":
         doc.add_text("每局数据", "OP.GG 暂未提供该场比赛的单局数据")
     else:
         doc.add_text("每局数据", "比赛尚未开始" if row["score_cls"] == "todo" else "第一局数据暂未更新")
+    doc.tip("/lol 赛果", "其他比赛结果")
+    doc.tip(f"/lol 订阅 赛事 {info['short'] if info['color'] else 'S赛 LPL'}", "开赛提醒与赛果推送")
     doc.footer = freshness(created)
     doc.link = g.get("details") or ""
     return View("lol_esports_match", {"match": g, "games": games}, doc, created)
@@ -266,6 +269,14 @@ def build_esports_game_view(g: dict, game: dict, gd: GameData, tz: str, created:
     ] if x)
     if not info["logo"]:
         view.doc.icon, view.doc.icon_logo = (win_t or ht).get("logo"), True
+    view.doc.tips = []
+    ref = home.get("acronym") or ht["label"]
+    view.doc.tip(f"/lol 赛况 {ref}", "返回整场每局数据")
+    if int(g.get("homeScore") or 0) + int(g.get("awayScore") or 0) > int(n.get("set") or 0):
+        view.doc.tip(f"/lol 赛况 {ref} {int(n.get('set') or 0) + 1}", "下一局")
+    best = max((p for t in n["teams"] for p in t["players"]), key=lambda p: float(p.get("score") or -1), default=None)
+    if best and best.get("champion_name"):
+        view.doc.tip(f"/lol 英雄 {best['champion_name']}", f"{best['game_name']} 所用英雄的出装")
     view.doc.link = g.get("details") or ""
     view.kind = "lol_esports_game"
     return view

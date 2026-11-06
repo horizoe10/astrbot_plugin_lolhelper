@@ -39,6 +39,10 @@ def render_text(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> str:
             lines.append(s.text)
         if s.note:
             lines.append(f"（{s.note}）")
+    if doc.tips:
+        lines.append("")
+        lines.append("💡 试试：")
+        lines.extend(f"  {t['cmd']}  {t['desc']}".rstrip() for t in doc.tips)
     if show_footer and doc.footer:
         lines.append("")
         lines.append(doc.footer)

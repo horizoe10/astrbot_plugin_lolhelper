@@ -85,6 +85,10 @@ class Settings:
     cn_servers_extra: dict[str, tuple[str, str]] = field(default_factory=dict)
     # esports
     esports_default_leagues: list[str] = field(default_factory=list)
+    # champion stats (OP.GG website): region + rank range
+    meta_region: str = "global"
+    meta_tier: str = "emerald_plus"
+    show_tips: bool = True
     # push
     push_enabled: bool = True
     push_match_interval: float = 300
@@ -103,6 +107,7 @@ class Settings:
         s = cls()
         ds, net, out, q, cache = (_group(conf, k) for k in ("data_source", "network", "output", "query", "cache"))
         cn, es, push, al = (_group(conf, k) for k in ("cn", "esports", "push", "aliases"))
+        mt = _group(conf, "meta")
 
         def g(d: dict, key: str, default):
             v = d.get(key, default)
@@ -130,6 +135,7 @@ class Settings:
         s.image_quality = int(g(out, "image_quality", s.image_quality))
         s.image_fallback_markdown = bool(g(out, "image_fallback_markdown", s.image_fallback_markdown))
         s.image_inline_icons = bool(g(out, "inline_icons", s.image_inline_icons))
+        s.show_tips = bool(g(out, "show_tips", s.show_tips))
 
         s.default_region = str(g(q, "default_region", s.default_region)).lower() or "kr"
         s.match_count = int(g(q, "match_count", s.match_count))
@@ -159,6 +165,13 @@ class Settings:
         dl = g(es, "default_leagues", [])
         words = [str(x).strip() for x in dl] if isinstance(dl, list) else str(dl).replace(",", " ").split()
         s.esports_default_leagues = parse_leagues([w for w in words if w])[0]
+
+        from .opgg_web import META_REGIONS, META_TIERS
+
+        region = str(g(mt, "region", s.meta_region)).lower()
+        s.meta_region = region if region in META_REGIONS else "global"
+        tier = str(g(mt, "tier", s.meta_tier)).lower()
+        s.meta_tier = tier if tier in META_TIERS else "emerald_plus"
 
         s.push_enabled = bool(g(push, "enabled", s.push_enabled))
         s.push_match_interval = max(60.0, float(g(push, "match_interval_min", 5)) * 60)

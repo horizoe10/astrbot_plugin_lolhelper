@@ -56,6 +56,8 @@ class ServiceConfig:
     ttl_matches: float = 120
     ttl_esports: float = 300
     ttl_tft: float = 3600
+    meta_region: str = "global"  # OP.GG website stats: global | kr
+    meta_tier: str = "emerald_plus"  # rank range for tier lists and builds
 
 
 @dataclass
@@ -178,6 +180,7 @@ class OpggService:
         self.logger = logger or logging.getLogger("lolhelper")
         self.cache = TTLCache(1024)
         self.esp = None  # EsportsClient, set by the facade
+        self.web = None  # OpggWebClient (OP.GG website stats), set by the facade
 
     async def _cached(self, key: str, ttl: float, tool: str, args: dict) -> tuple[Any, float]:
         return await self.cache.get_or_load(key, ttl, lambda: self.mcp.call(tool, args))
@@ -189,48 +192,92 @@ class OpggService:
         return " · ".join(parts)
 
     # ================================================================ LoL meta
-    async def lane_meta(self, positions: list[str] | None = None) -> tuple[dict[str, list[dict]], float]:
+    async def lane_meta(self, positions: list[str] | None = None, region: str | None = None,
+                        tier: str | None = None) -> tuple[dict[str, list[dict]], float, dict]:
+        """Lane tier lists. Website data (region / rank range) first, MCP as fallback."""
+        from .opgg_web import lane_rows
+
         positions = positions or list(POSITIONS)
+        region, tier = region or self.cfg.meta_region, tier or self.cfg.meta_tier
+        if self.web is not None:
+            try:
+                (data, meta), created = await self.cache.get_or_load(
+                    f"web:meta:{region}:{tier}", self.cfg.ttl_meta, lambda: self.web.meta(region, "ranked", tier))
+                rows = lane_rows(data, self.gd)
+                scope = {"source": "web", "region": region, "tier": tier, "version": meta.get("version"),
+                         "matches": meta.get("match_count")}
+                return {p: rows.get(p, []) for p in positions}, created, scope
+            except UpstreamError as exc:
+                self.logger.info(f"[lolhelper] OP.GG 网站梯队数据获取失败，改用 MCP：{exc}")
         pos_arg = positions[0] if len(positions) == 1 else "all"
-        key = f"lane:{pos_arg}"
         raw, created = await self._cached(
-            key,
+            f"lane:{pos_arg}",
             self.cfg.ttl_meta,
             "lol_list_lane_meta_champions",
             {"lang": self.cfg.lang, "position": pos_arg, "desired_output_fields": _lane_fields(positions)},
         )
         out = {p: list(dig(raw, f"data.positions.{p}", []) or []) for p in positions}
-        return out, created
+        return out, created, {"source": "mcp"}
 
-    async def primary_position(self, champ: dict) -> str:
+    async def primary_position(self, champ: dict, region: str | None = None, tier: str | None = None) -> str:
         try:
-            meta, _ = await self.lane_meta()
+            meta, _, _ = await self.lane_meta(None, region, tier)
         except Exception:
             return "mid"
         best, best_rate = "mid", -1.0
         for pos, rows in meta.items():
             for r in rows:
-                c = self.gd.champion_by_name(r.get("champion", ""))
+                cid = r.get("champion_id")
+                c = self.gd.champion(cid) if cid else self.gd.champion_by_name(r.get("champion", ""))
                 if c and c["id"] == champ["id"]:
                     rate = float(r.get("role_rate") or r.get("pick_rate") or 0)
                     if rate > best_rate:
                         best, best_rate = pos, rate
         return best
 
-    async def tier(self, position: str | None = None, limit: int = 15) -> View:
+    def scope_badges(self, doc: Doc, scope: dict, mode: str = "ranked") -> None:
+        """Data range chips under the title: region + rank range (with emblem), or the MCP fallback."""
+        from .opgg_web import META_REGIONS, META_TIERS, NO_TIER_MODES, WEB_MODES
+
+        if scope.get("source") != "web":
+            doc.badge("OP.GG 默认数据", "scope")
+            return
+        doc.badge(META_REGIONS.get(scope["region"], str(scope["region"]).upper()), "scope")
+        if WEB_MODES.get(mode, mode) in NO_TIER_MODES:
+            doc.badge("全部段位", "scope")
+        else:
+            label, emblem = META_TIERS.get(scope["tier"], (scope["tier"], ""))
+            doc.badge(label, "scope", img=tier_emblem(emblem) if emblem else None)
+
+    @staticmethod
+    def other_scope(scope: dict) -> str:
+        """An example region / rank range different from the current one, for the hint bar."""
+        region = "韩服" if scope.get("region", "global") == "global" else "全球"
+        tier = "大师+" if scope.get("tier") != "master_plus" else "钻石+"
+        return f"{region} {tier}"
+
+    async def tier(self, position: str | None = None, limit: int = 15, region: str | None = None,
+                   tier: str | None = None) -> View:
         await self.gd.ensure_lol()
         positions = [position] if position else list(POSITIONS)
-        meta, created = await self.lane_meta(positions)
+        meta, created, scope = await self.lane_meta(positions, region, tier)
         per = limit if position else min(limit, 5)
         title = f"{POSITIONS[position]}梯队" if position else "版本梯队"
-        doc = Doc(title=title, subtitle=f"OP.GG 单双排 · 版本 {self.gd.version}", theme="lol")
-        data: dict[str, Any] = {"positions": {}}
+        version = scope.get("version") or self.gd.version
+        sub = ["单双排", f"版本 {version}"]
+        if scope.get("matches"):
+            sub.append(f"{big(scope['matches'])} 场")
+        doc = Doc(title=title, subtitle=" · ".join(sub), theme="lol")
+        self.scope_badges(doc, scope)
+        data: dict[str, Any] = {"positions": {}, "scope": scope, "order": {}}
         for pos in positions:
             rows = sorted(meta.get(pos, []), key=lambda r: r.get("rank") or 999)
             data["positions"][pos] = rows
+            data["order"][pos] = [r.get("champion_id") or r.get("champion") for r in rows[:per]]
             table = []
             for r in rows[:per]:
                 name = r.get("champion", "?")
+                icon = self.gd.champ_icon(self.gd.champion(r["champion_id"])) if r.get("champion_id") else self.gd.champ_icon_by_name(name)
                 trend, trend_cls = "", ""
                 if r.get("rank_prev") and r.get("rank"):
                     diff = int(r["rank_prev"]) - int(r["rank"])
@@ -239,7 +286,7 @@ class OpggService:
                 t = r.get("tier")
                 table.append([
                     Cell(str(r.get("rank", "")), cls=rank_cls(r.get("rank")), sub=trend, sub_cls=trend_cls),
-                    Cell(name, img=self.gd.champ_icon_by_name(name)),
+                    Cell(name, img=icon),
                     Cell(("OP" if str(t) == "0" else f"T{t}") if t is not None else "-", cls=tier_pill(t)),
                     Cell(pct(r.get("win_rate")), cls=rate_cls(r.get("win_rate"), 0.52, 0.48)),
                     pct(r.get("pick_rate")),
@@ -249,15 +296,49 @@ class OpggService:
                 POSITIONS[pos] if not position else "",
                 ["#", "英雄", "梯队", "胜率", "登场", "禁用"],
                 table,
+                widths=["13%", "33%", "13%", "14%", "13%", "14%"],
             )
+        first = data["positions"][positions[0]][:3]
+        if position:
+            pick = first[2] if len(first) > 2 else (first[0] if first else None)
+            n = first.index(pick) + 1 if pick else 1
+            doc.tip(f"/lol 英雄 {n}", f"查看第 {n} 名{pick.get('champion', '') if pick else ''}的出装")
+            other = next(p for p in POSITIONS if p != position)
+            doc.tip(f"/lol 梯队 {POSITIONS[other]}", "换个分路")
+            doc.tip(f"/lol 梯队 {POSITIONS[position]} {self.other_scope(scope)}", "换地区和段位")
+        else:
+            mid1 = (data["positions"].get("mid") or [{}])[0]
+            doc.tip("/lol 英雄 中单 1", f"查看中单第 1 名{mid1.get('champion', '')}的出装")
+            doc.tip("/lol 梯队 打野", "只看一个分路，显示更多")
+            doc.tip(f"/lol 梯队 {self.other_scope(scope)}", "换地区和段位")
         doc.footer = self._foot(created)
         doc.link = "https://op.gg/lol/champions" + (f"?position={position}" if position else "")
         return View("lol_tier", data, doc, created)
 
-    async def champion(self, query: str, position: str | None = None, mode: str | None = None) -> View:
+    async def _web_champion(self, champ: dict, mode: str, position: str | None, region: str, tier: str) -> tuple[dict, float, dict] | None:
+        """Champion build from the OP.GG website API, converted to the MCP shape; None when unavailable."""
+        from .opgg_web import NO_TIER_MODES, WEB_MODES, analysis
+
+        web_mode = WEB_MODES.get(mode)
+        if self.web is None or not web_mode:
+            return None
+        eff_tier = "all" if web_mode in NO_TIER_MODES else tier
+        try:
+            (data, meta), created = await self.cache.get_or_load(
+                f"web:champ:{region}:{web_mode}:{champ['id']}:{position}:{eff_tier}", self.cfg.ttl_build,
+                lambda: self.web.champion(region, web_mode, champ["id"], position, eff_tier))
+        except UpstreamError as exc:
+            self.logger.info(f"[lolhelper] OP.GG 网站英雄数据获取失败，改用 MCP：{exc}")
+            return None
+        scope = {"source": "web", "region": region, "tier": eff_tier, "version": meta.get("version")}
+        return analysis(data, position, self.gd), created, scope
+
+    async def champion(self, query: str, position: str | None = None, mode: str | None = None,
+                       region: str | None = None, tier: str | None = None) -> View:
         await self.gd.ensure_lol()
         champ = self.gd.resolve_champion(query)
         mode = mode or "ranked"
+        region, tier = region or self.cfg.meta_region, tier or self.cfg.meta_tier
         # OP.GG has no separate ARAM Mayhem build data: builds come from ARAM, plus Mayhem augments.
         api_mode = "aram" if mode == "mayhem" else mode
         if api_mode in ("urf", "nexus_blitz"):
@@ -265,7 +346,14 @@ class OpggService:
         elif api_mode == "aram":
             api_pos = "mid"  # ARAM ignores lanes but the API needs a real one
         else:
-            api_pos = position or await self.primary_position(champ)
+            api_pos = position or await self.primary_position(champ, region, tier)
+        web_pos = api_pos if api_pos in POSITIONS and api_mode in ("ranked", "flex") else None
+        augments_task = self.mayhem_augments(champ) if mode == "mayhem" else None
+        web = await self._web_champion(champ, api_mode, web_pos, region, tier)
+        if web is not None:
+            d, created, scope = web
+            augments = await augments_task if augments_task else None
+            return await self._champion_view(champ, mode, api_pos, d, created, scope, augments)
         key = f"champ:{champ['key']}:{api_pos}:{api_mode}"
         try:
             build_task = self._cached(
@@ -281,7 +369,7 @@ class OpggService:
                 },
             )
             if mode == "mayhem":
-                (raw, created), augments = await asyncio.gather(build_task, self.mayhem_augments(champ))
+                (raw, created), augments = await asyncio.gather(build_task, augments_task)
             else:
                 raw, created = await build_task
                 augments = None
@@ -289,12 +377,17 @@ class OpggService:
             if api_pos == "none" and "position" in str(exc).lower() or "位置" in str(exc):
                 raise UsageError(f"OP.GG 暂不提供{GAME_MODES.get(mode, mode)}的英雄数据") from exc
             raise
-        d = dig(raw, "data", {}) or {}
+        return await self._champion_view(champ, mode, api_pos, dig(raw, "data", {}) or {}, created, {"source": "mcp"}, augments)
+
+    async def _champion_view(self, champ: dict, mode: str, api_pos: str, d: dict, created: float, scope: dict,
+                             augments: list[dict] | None) -> View:
         stats = dig(d, "summary.average_stats", {}) or {}
         pos_label = POSITIONS.get(api_pos, "") if mode in ("ranked", "flex") else ""
         title = self.gd.display_name(champ)
-        subtitle = " · ".join(x for x in [pos_label, GAME_MODES.get(mode, mode), f"版本 {self.gd.version}"] if x)
+        version = scope.get("version") or self.gd.version
+        subtitle = " · ".join(x for x in [pos_label, GAME_MODES.get(mode, mode), f"版本 {version}"] if x)
         doc = Doc(title=title, subtitle=subtitle, icon=self.gd.champ_icon(champ), theme="lol")
+        self.scope_badges(doc, scope, mode)
         t = stats.get("tier")
         if t is not None:
             doc.badge("OP" if str(t) == "0" else f"T{t}", tier_pill(t))
@@ -319,11 +412,19 @@ class OpggService:
             out = []
             for i, name in enumerate(names or [self.gd.item_name(x) for x in ids]):
                 iid = ids[i] if i < len(ids) else None
+                if out and i > 0 and iid is not None and iid == ids[i - 1]:
+                    prev = out[-1]
+                    n = int(prev.text.rsplit("×", 1)[1]) + 1 if "×" in prev.text else 2
+                    prev.text = f"{name} ×{n}"
+                    continue
                 out.append(Cell(text=name, img=self.gd.item_icon(iid) if iid else None, sub=label if i == 0 else ""))
             return out
 
         core = d.get("core_items") or {}
-        core_tiles = tiles_of(d.get("starter_items"), "出门") + tiles_of(core, "核心") + tiles_of(d.get("boots"), "鞋子")
+        boots = d.get("boots") or {}
+        if set(boots.get("ids") or []) & (set(core.get("ids") or []) | set((d.get("starter_items") or {}).get("ids") or [])):
+            boots = {}  # ARAM builds already list the boots as a starter / core item
+        core_tiles = tiles_of(d.get("starter_items"), "出门") + tiles_of(core, "核心") + tiles_of(boots, "鞋子")
         if core_tiles:
             note = ""
             if core.get("play"):
@@ -340,6 +441,12 @@ class OpggService:
             if opts:
                 rows.append({"label": label, "items": opts})
                 lines.append(f"{label}：" + " / ".join(f"{o['name']}({o['sub']})" for o in opts))
+        later = [x for x in d.get("later_items") or [] if x.get("ids")]
+        if later:
+            opts = [{"icon": self.gd.item_icon(x["ids"][0]), "name": self.gd.item_name(x["ids"][0]), "sub": pct(x.get("pick_rate"))}
+                    for x in later[:6]]
+            rows.append({"label": "常见后续", "items": opts})
+            lines.append("常见后续：" + " / ".join(f"{o['name']}({o['sub']})" for o in opts))
         doc.add_block("后续装备", "iconrows", {"rows": rows}, lines)
         await self._add_skills(doc, champ, d)
         counter_rows, counter_lines = [], []
@@ -348,7 +455,7 @@ class OpggService:
             for c in (d.get(key_name) or [])[:5]:
                 name = c.get("champion_name", "?")
                 icon = self.gd.champ_icon(self.gd.champion(c.get("champion_id"))) if c.get("champion_id") else self.gd.champ_icon_by_name(name)
-                items.append({"icon": icon, "name": name, "sub": f"胜率 {pct(c.get('my_win_rate'))} · {big(c.get('play'))}场", "cls": cls})
+                items.append({"icon": icon, "name": name, "sub": f"胜率 {pct(c.get('my_win_rate'))}", "cls": cls})
             if items:
                 counter_rows.append({"label": label, "items": items})
                 counter_lines.append(f"{label}：" + " / ".join(f"{i['name']}({i['sub']})" for i in items))
@@ -359,7 +466,18 @@ class OpggService:
             doc.footer += " · 出装与符文为极地大乱斗数据"
         lane = api_pos if api_pos in POSITIONS else ""
         doc.link = f"https://op.gg/lol/champions/{champ['key'].lower()}/build" + (f"/{lane}" if lane else "")
-        data = {"champion": champ, "position": api_pos, "mode": mode, "analysis": d}
+        name = self.gd.display_name(champ).split(" ")[0]
+        if mode == "mayhem":
+            doc.tip(f"/lol 英雄 {name}", "排位出装与克制")
+            doc.tip("/lol 梯队", "版本强势英雄")
+        elif mode in ("ranked", "flex") and lane:
+            doc.tip(f"/lol 海克斯 {name}", "海克斯大乱斗出装与强化")
+            doc.tip(f"/lol 英雄 {name} {POSITIONS[lane]} {self.other_scope(scope)}", "换地区和段位")
+            doc.tip(f"/lol 梯队 {POSITIONS[lane]}", "同分路强势英雄")
+        else:
+            doc.tip(f"/lol 英雄 {name}", "排位出装与克制")
+            doc.tip(f"/lol 海克斯 {name}", "海克斯大乱斗出装与强化")
+        data = {"champion": champ, "position": api_pos, "mode": mode, "analysis": d, "scope": scope}
         return View("lol_champion", data, doc, created)
 
     # ============================================================== summoners
@@ -635,12 +753,25 @@ class OpggService:
                 f"最近 {len(matches)} 场",
                 games,
                 self.gd,
-                note=self.match_summary(entries) + " · 发送「/lol 对局 序号」查看单局详情",
+                note=self.match_summary(entries),
             )
+            self.match_tips(doc, entries)
         doc.footer = self._foot(created)
         doc.link = f"https://op.gg/lol/summoners/{region}/{quote(riot_id.replace('#', '-'))}"
         data = {"region": region, "summoner": summ, "matches": matches}
         return View("lol_summoner", data, doc, created)
+
+    @staticmethod
+    def match_tips(doc: Doc, entries: list[dict]) -> None:
+        """Hint bar for match lists: game detail, subscribe, build of the most played champion."""
+        from collections import Counter
+
+        doc.tip("/lol 对局 1", "查看第 1 场的双方 10 人数据")
+        doc.tip("/lol 订阅 战绩", "有新对局时自动推送")
+        names = Counter(str(e.get("champion_name") or "").split(" ")[0] for e in entries if e.get("champion_name"))
+        if names:
+            champ = names.most_common(1)[0][0]
+            doc.tip(f"/lol 英雄 {champ}", "最近常玩英雄的出装")
 
     async def _game_raw(self, region: str, m: dict, name: str, tag: str) -> tuple[dict, float]:
         from .game import F_GAME
@@ -743,8 +874,17 @@ class OpggService:
         if not vs_rows:
             doc.add_text("", "暂无" + ("近期赛果" if mode == "result" else "后续赛程"))
         else:
-            doc.add_block("", "versus", {"rows": vs_rows}, lines,
-                          note="发送「/lol 赛况 序号」查看每局阵容与数据" if mode == "result" else "")
+            doc.add_block("", "versus", {"rows": vs_rows}, lines)
+        lg_words = " ".join(league_label(x) for x in leagues)
+        if mode == "result":
+            if vs_rows:
+                doc.tip("/lol 赛况 1", "第 1 场每局阵容与数据")
+            doc.tip(f"/lol 赛程 {lg_words}".rstrip(), "后续赛程")
+        else:
+            doc.tip(f"/lol 赛果 {lg_words}".rstrip(), "已结束的比赛")
+        doc.tip(f"/lol 订阅 赛事 {lg_words or 'S赛 LPL'}", "开赛提醒与赛果推送")
+        lg1 = next((x for x in leagues if x not in ("worlds", "msi", "first stand", "ewc")), "lpl")
+        doc.tip(f"/lol 积分 {league_label(lg1)}", "联赛积分榜")
         doc.footer = self._foot(created)
         doc.link = "https://esports.op.gg/schedules"
         return View("lol_esports", {"mode": mode, "league": leagues[0] if len(leagues) == 1 else None, "leagues": leagues, "games": games}, doc, created)
@@ -821,6 +961,10 @@ class OpggService:
                 str(s.get("point", "")),
             ])
         doc.add_table("", ["#", "战队", "大场", "小场", "积分"], rows)
+        short = league_label(league_info(lg.get("shortName") or league)["key"]) if league_info(lg.get("shortName") or league)["color"] else league.upper()
+        doc.tip(f"/lol 赛程 {short}", "后续赛程")
+        doc.tip(f"/lol 赛果 {short}", "最近赛果")
+        doc.tip(f"/lol 订阅 赛事 {short}", "开赛提醒与赛果推送")
         doc.footer = self._foot(created)
         return View("lol_standings", raw, doc, created)
 

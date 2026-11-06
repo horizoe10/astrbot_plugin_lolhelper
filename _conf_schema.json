@@ -107,6 +107,12 @@
           "浅色"
         ]
       },
+      "show_tips": {
+        "description": "显示指令引导",
+        "type": "bool",
+        "default": true,
+        "hint": "在卡片底部显示 2~3 条相关指令示例，例如在梯队卡上提示 /lol 英雄 3 查看第 3 名的出装"
+      },
       "image_quality": {
         "description": "图片 JPEG 质量",
         "type": "int",
@@ -184,6 +190,54 @@
         "type": "string",
         "default": "Asia/Shanghai",
         "invisible": true
+      }
+    }
+  },
+  "meta": {
+    "description": "英雄数据",
+    "type": "object",
+    "hint": "梯队排行榜和英雄出装使用的 OP.GG 数据范围；查询时也可临时指定，例如 /lol 梯队 中单 韩服 钻石+",
+    "items": {
+      "region": {
+        "description": "数据地区",
+        "type": "string",
+        "default": "global",
+        "options": [
+          "global",
+          "kr"
+        ],
+        "labels": [
+          "全球",
+          "韩服"
+        ]
+      },
+      "tier": {
+        "description": "段位范围",
+        "type": "string",
+        "default": "emerald_plus",
+        "options": [
+          "all",
+          "gold_plus",
+          "platinum_plus",
+          "emerald_plus",
+          "diamond_plus",
+          "master_plus",
+          "master",
+          "grandmaster",
+          "challenger"
+        ],
+        "labels": [
+          "全部段位",
+          "黄金及以上",
+          "铂金及以上",
+          "翡翠及以上",
+          "钻石及以上",
+          "大师及以上",
+          "超凡大师",
+          "傲世宗师",
+          "最强王者"
+        ],
+        "hint": "大乱斗、无限火力没有段位划分，固定使用全部段位"
       }
     }
   },

@@ -417,5 +417,11 @@ def build_game_view(game: dict, gd: GameData, theme: str = "lol", tz: str = "Asi
         panel, lines = team_panel(t, game, gd, max_dmg, max_taken)
         doc.add_team(panel, lines)
     doc.footer = freshness(created or time.time()) + (" · 数据来自国服客户端" if game.get("source") == "sgp" else "")
+    if target:
+        name = str(target.get("champion_name") or "").split(" ")[0]
+        if name:
+            doc.tip(f"/lol 英雄 {name}", "本局英雄的出装与克制")
+        doc.tip("/lol 对局 2", "看上一场")
+        doc.tip("/lol 战绩", "返回战绩列表")
     return View("lol_game", game, doc, created or time.time())
 

@@ -11,6 +11,7 @@ from astrbot.api.star import Context, Star, StarTools
 
 from .lolhelper import PLUGIN_NAME, VERSION
 from .lolhelper.args import MODE_WORDS, parse_args, parse_leagues, parse_target, pick_game_mode, pick_position
+from .lolhelper.opgg_web import pick_scope
 from .lolhelper.constants import (
     CN_LEGACY_SERVERS,
     CN_SERVERS,
@@ -31,9 +32,9 @@ MODE_ZH = {"text": "纯文本", "markdown": "Markdown", "image": "图片"}
 HELP = """联盟助手 v{version}
 
 英雄联盟
-/lol 英雄 <英雄> [位置] [模式]   出装/符文/克制
+/lol 英雄 <英雄|梯队序号> [位置] [模式]   出装/符文/克制
 /lol 海克斯 <英雄>              海克斯大乱斗：出装 + 强化推荐
-/lol 梯队 [位置]                版本强势英雄
+/lol 梯队 [位置] [全球/韩服] [翡翠+…]   版本强势英雄
 /lol 战绩 [名字#标签] [大区]     最近对局（可@已绑定的人）
 /lol 资料 [名字#标签] [大区]     段位与常用英雄
 /lol 对局 [序号] [名字#标签]     单局详情（双方 10 人）
@@ -184,14 +185,34 @@ class LolHelperPlugin(Star):
 
     @lol.command("英雄", alias={"出装", "build", "champ", "champion"})
     async def lol_champion(self, event: AstrMessageEvent):
-        """英雄出装、符文与克制：/lol 英雄 亚索 中单"""
+        """英雄出装、符文与克制：/lol 英雄 亚索 中单 [韩服] [钻石+]，或看完梯队后 /lol 英雄 3"""
         a = parse_args(self._rest(event, {"英雄", "出装", "build", "champ", "champion"}))
         pos, words = pick_position(a.words)
         mode, words = pick_game_mode(words)
+        region, tier, words = pick_scope(words)
         if not words:
-            yield self._plain(event, "用法：/lol 英雄 <英雄名> [位置] [排位/大乱斗]")
+            yield self._plain(event, "用法：/lol 英雄 <英雄名|梯队序号> [位置] [排位/大乱斗] [全球/韩服] [翡翠+/钻石+…]")
             return
-        yield await self._answer(event, lambda: self.f.champion(" ".join(words), pos, mode), a.mode)
+        if len(words) == 1 and words[0].isdigit() and int(words[0]) <= 50:
+            last = self.f.store.state(f"last_tier:{event.unified_msg_origin}") or {}
+            order = last.get("order") or {}
+            if not order:
+                yield self._plain(event, "请先发送 /lol 梯队 [位置] 查看排行榜，再用序号查询英雄，例如 /lol 英雄 3")
+                return
+            if pos is None and len(order) == 1:
+                pos = next(iter(order))
+            if pos not in order:
+                yield self._plain(event, "上一张是全分路梯队，请带上位置，例如 /lol 英雄 中单 3")
+                return
+            n = int(words[0])
+            if not 1 <= n <= len(order[pos]):
+                yield self._plain(event, f"序号需要在 1~{len(order[pos])} 之间")
+                return
+            item = order[pos][n - 1]
+            c = self.f.gd.champion(item) if isinstance(item, int) or str(item).isdigit() else None
+            words = [self.f.gd.display_name(c).split(" ")[0] if c else str(item)]
+            region, tier = region or last.get("region"), tier or last.get("tier")
+        yield await self._answer(event, lambda: self.f.champion(" ".join(words), pos, mode, region, tier), a.mode)
 
     @lol.command("海克斯", alias={"海克斯大乱斗", "mayhem"})
     async def lol_mayhem(self, event: AstrMessageEvent):
@@ -206,10 +227,20 @@ class LolHelperPlugin(Star):
 
     @lol.command("梯队", alias={"tier", "强势", "版本"})
     async def lol_tier(self, event: AstrMessageEvent):
-        """版本梯队：/lol 梯队 [位置]"""
+        """版本梯队：/lol 梯队 [位置] [全球/韩服] [翡翠+/钻石+…]"""
         a = parse_args(self._rest(event, {"梯队", "tier", "强势", "版本"}))
-        pos, _ = pick_position(a.words)
-        yield await self._answer(event, lambda: self.f.tier(pos), a.mode)
+        pos, words = pick_position(a.words)
+        region, tier, _ = pick_scope(words)
+        umo = event.unified_msg_origin
+
+        async def make():
+            view = await self.f.tier(pos, region, tier)
+            scope = view.data.get("scope") or {}
+            self.f.store.set_state(f"last_tier:{umo}", {
+                "order": view.data.get("order") or {}, "region": scope.get("region"), "tier": scope.get("tier")})
+            return view
+
+        yield await self._answer(event, make, a.mode)
 
     @lol.command("战绩", alias={"match", "matches", "最近", "战绩查询"})
     async def lol_matches(self, event: AstrMessageEvent):

@@ -59,6 +59,9 @@ def render_markdown(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> s
         if s.note:
             out.append("")
             out.append(f"_{s.note}_")
+    if doc.tips:
+        out.append("")
+        out.append("> 💡 **试试** " + " · ".join(f"\u0060{t['cmd']}\u0060 {t['desc']}".rstrip() for t in doc.tips))
     if doc.link:
         out.append("")
         out.append(f"[在 OP.GG 查看]({doc.link})")

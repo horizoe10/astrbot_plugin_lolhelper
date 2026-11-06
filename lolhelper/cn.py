@@ -439,8 +439,9 @@ class CnService:
                 f"最近 {len(matches)} 场",
                 [m["_game"] for m in matches],
                 self.gd,
-                note=OpggService.match_summary(matches) + " · 发送「/lol 对局 序号」查看单局详情",
+                note=OpggService.match_summary(matches),
             )
+            OpggService.match_tips(doc, matches)
         else:
             doc.add_text("", "没有查到最近的对局记录")
         from_wg = bool(matches) and str((matches[0].get("_game") or {}).get("source", "")).startswith("wegame")

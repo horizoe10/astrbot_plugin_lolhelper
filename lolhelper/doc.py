@@ -42,6 +42,7 @@ class Section:
     total: int = 0  # original number of rows before truncation
     cards: list[dict] = field(default_factory=list)  # match list cards (image only)
     team: dict = field(default_factory=dict)  # team panel of a match detail (image only)
+    widths: list[str] = field(default_factory=list)  # fixed column widths (image), e.g. ["10%", "30%", ...]
     block: dict = field(default_factory=dict)  # structured data for runes / skills / iconrows (image only)
 
 
@@ -58,11 +59,17 @@ class Doc:
     width: int = 0  # image width override
     accent: str = ""  # theme color override (e.g. per esports league)
     icon_logo: bool = False  # icon is a transparent logo: show whole, no cropping
+    tips: list[dict] = field(default_factory=list)  # command hints shown at the bottom: {"cmd", "desc"}
 
     # builders -----------------------------------------------------------------
-    def badge(self, text: str, cls: str = "") -> "Doc":
+    def badge(self, text: str, cls: str = "", img: str | None = None) -> "Doc":
         if text:
-            self.badges.append(Cell(text=text, cls=cls))
+            self.badges.append(Cell(text=text, cls=cls, img=img))
+        return self
+
+    def tip(self, cmd: str, desc: str = "") -> "Doc":
+        if cmd and len(self.tips) < 3:
+            self.tips.append({"cmd": cmd, "desc": desc})
         return self
 
     def add_kv(self, title: str, pairs: list[tuple[str, Any]], note: str = "") -> "Doc":
@@ -72,12 +79,12 @@ class Doc:
         return self
 
     def add_table(
-        self, title: str, headers: list[str], rows: list[list[Any]], note: str = ""
+        self, title: str, headers: list[str], rows: list[list[Any]], note: str = "", widths: list[str] | None = None
     ) -> "Doc":
         cells = [[Cell.of(v) for v in r] for r in rows]
         if cells:
             self.sections.append(
-                Section(title=title, kind="table", headers=headers, rows=cells, note=note, total=len(cells))
+                Section(title=title, kind="table", headers=headers, rows=cells, note=note, total=len(cells), widths=list(widths or []))
             )
         return self
 
