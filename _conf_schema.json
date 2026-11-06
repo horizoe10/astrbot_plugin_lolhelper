@@ -1,0 +1,425 @@
+{
+  "data_source": {
+    "description": "数据源",
+    "type": "object",
+    "items": {
+      "mcp_endpoint": {
+        "description": "OP.GG MCP 地址",
+        "type": "string",
+        "default": "https://mcp-api.op.gg/mcp",
+        "hint": "OP.GG 官方 MCP（Streamable HTTP），一般无需修改"
+      },
+      "lang": {
+        "description": "数据语言",
+        "type": "string",
+        "default": "zh_CN",
+        "options": [
+          "zh_CN",
+          "zh_TW",
+          "en_US",
+          "ko_KR",
+          "ja_JP"
+        ]
+      },
+      "timeout": {
+        "description": "请求超时（秒）",
+        "type": "int",
+        "default": 20
+      },
+      "concurrency": {
+        "description": "最大并发请求数",
+        "type": "int",
+        "default": 4,
+        "slider": {
+          "min": 1,
+          "max": 16,
+          "step": 1
+        }
+      },
+      "min_interval_ms": {
+        "description": "两次请求最小间隔（毫秒）",
+        "type": "int",
+        "default": 150
+      },
+      "tool_overrides": {
+        "description": "MCP 工具名映射",
+        "type": "text",
+        "default": "",
+        "hint": "OP.GG 改名时使用，每行 旧名=新名，例如 lol_list_summoner_matches=lol_get_summoner_matches"
+      }
+    }
+  },
+  "network": {
+    "description": "网络",
+    "type": "object",
+    "items": {
+      "proxy": {
+        "description": "出站代理",
+        "type": "string",
+        "default": "",
+        "hint": "访问 OP.GG / Data Dragon / CommunityDragon 时使用，例如 http://127.0.0.1:7890；留空直连。国服本地代理不走此代理"
+      },
+      "ddragon_base": {
+        "description": "Data Dragon 地址",
+        "type": "string",
+        "default": "https://ddragon.leagueoflegends.com",
+        "hint": "可换成镜像地址"
+      },
+      "cdragon_base": {
+        "description": "CommunityDragon 地址",
+        "type": "string",
+        "default": "https://raw.communitydragon.org"
+      },
+      "gamedata_refresh_hours": {
+        "description": "游戏静态数据刷新间隔（小时）",
+        "type": "int",
+        "default": 24
+      }
+    }
+  },
+  "output": {
+    "description": "输出",
+    "type": "object",
+    "items": {
+      "default_mode": {
+        "description": "默认输出方式",
+        "type": "string",
+        "default": "image",
+        "options": [
+          "image",
+          "markdown",
+          "text"
+        ],
+        "labels": [
+          "图片整合",
+          "Markdown",
+          "纯文本"
+        ],
+        "hint": "可被会话设置（/lol 模式）和单次参数（-t/-m/-i）覆盖"
+      },
+      "markdown_platforms": {
+        "description": "支持 Markdown 的平台",
+        "type": "list",
+        "default": [
+          "telegram",
+          "discord",
+          "lark",
+          "kook",
+          "dingtalk",
+          "slack",
+          "mattermost",
+          "webchat"
+        ],
+        "hint": "不在列表中的平台会把 Markdown 降级为纯文本。QQ 官方机器人开通 Markdown 权限后可加入 qq_official"
+      },
+      "text_max_rows": {
+        "description": "文本 / Markdown 每个表格最多行数",
+        "type": "int",
+        "default": 10
+      },
+      "image_max_rows": {
+        "description": "图片每个表格最多行数",
+        "type": "int",
+        "default": 15
+      },
+      "image_renderer": {
+        "description": "图片渲染方式",
+        "type": "string",
+        "default": "auto",
+        "options": [
+          "auto",
+          "t2i",
+          "playwright"
+        ],
+        "labels": [
+          "自动",
+          "AstrBot 文转图服务",
+          "本地 Playwright"
+        ],
+        "hint": "自动：已安装 playwright 时用本地浏览器渲染（找不到 Chromium 会改用系统 Edge/Chrome），否则用 AstrBot 文转图服务。本地渲染通常 3~5 秒，公共 t2i 服务 4~20 秒"
+      },
+      "image_theme": {
+        "description": "图片主题",
+        "type": "string",
+        "default": "dark",
+        "options": [
+          "dark",
+          "light"
+        ],
+        "labels": [
+          "深色",
+          "浅色"
+        ]
+      },
+      "image_quality": {
+        "description": "图片 JPEG 质量",
+        "type": "int",
+        "default": 85,
+        "slider": {
+          "min": 30,
+          "max": 100,
+          "step": 5
+        }
+      },
+      "image_fallback_markdown": {
+        "description": "图片失败时用 Markdown 转图",
+        "type": "bool",
+        "default": true,
+        "hint": "HTML 渲染不可用时，用 AstrBot 自带的本地 Markdown 渲染出图；关闭则直接发纯文本"
+      },
+      "inline_icons": {
+        "description": "图片内嵌图标",
+        "type": "bool",
+        "default": true,
+        "hint": "由插件下载英雄/装备图标并内嵌到图片模板，避免 t2i 服务访问图床超时导致图标缺失"
+      },
+      "show_footer": {
+        "description": "显示数据更新时间",
+        "type": "bool",
+        "default": true
+      }
+    }
+  },
+  "query": {
+    "description": "查询",
+    "type": "object",
+    "items": {
+      "default_region": {
+        "description": "外服默认大区",
+        "type": "string",
+        "default": "kr",
+        "options": [
+          "kr",
+          "na",
+          "euw",
+          "eune",
+          "jp",
+          "br",
+          "lan",
+          "las",
+          "oce",
+          "ru",
+          "tr",
+          "sg",
+          "ph",
+          "tw",
+          "vn",
+          "th",
+          "me"
+        ]
+      },
+      "match_count": {
+        "description": "战绩默认场次",
+        "type": "int",
+        "default": 8,
+        "slider": {
+          "min": 1,
+          "max": 20,
+          "step": 1
+        }
+      },
+      "match_details": {
+        "description": "战绩列表显示完整对局",
+        "type": "bool",
+        "default": true,
+        "hint": "外服战绩会逐场请求单局详情，用于显示双方 10 人、参团率、伤害占比和战绩标签（结果缓存 24 小时）；关闭可减少请求"
+      },
+      "timezone": {
+        "description": "时区",
+        "type": "string",
+        "default": "Asia/Shanghai"
+      }
+    }
+  },
+  "cache": {
+    "description": "缓存",
+    "type": "object",
+    "items": {
+      "meta_ttl_min": {
+        "description": "梯队数据（分钟）",
+        "type": "int",
+        "default": 180
+      },
+      "build_ttl_min": {
+        "description": "英雄出装（分钟）",
+        "type": "int",
+        "default": 60
+      },
+      "tft_ttl_min": {
+        "description": "云顶数据（分钟）",
+        "type": "int",
+        "default": 60
+      },
+      "profile_ttl_sec": {
+        "description": "召唤师资料（秒）",
+        "type": "int",
+        "default": 300
+      },
+      "matches_ttl_sec": {
+        "description": "战绩（秒）",
+        "type": "int",
+        "default": 120
+      },
+      "esports_ttl_sec": {
+        "description": "电竞赛程（秒）",
+        "type": "int",
+        "default": 300
+      }
+    }
+  },
+  "cn": {
+    "description": "国服（本地代理）",
+    "type": "object",
+    "hint": "OP.GG 不收录国服。在登录了国服客户端的电脑上运行插件目录下的 bridge/cn_bridge.py，再把地址和 Token 填到这里",
+    "items": {
+      "enabled": {
+        "description": "启用国服查询",
+        "type": "bool",
+        "default": true
+      },
+      "bridge_url": {
+        "description": "国服本地代理地址",
+        "type": "string",
+        "default": "http://127.0.0.1:6198",
+        "hint": "代理和 AstrBot 不在同一台机器时，填代理机器的局域网 / 内网穿透地址，并在 bridge.json 中把 host 改为 0.0.0.0"
+      },
+      "bridge_token": {
+        "description": "国服本地代理 Token",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "首次运行代理时生成，见 bridge/bridge.json"
+      },
+      "timeout": {
+        "description": "代理请求超时（秒）",
+        "type": "int",
+        "default": 15
+      },
+      "default_server": {
+        "description": "绑定国服时的默认大区",
+        "type": "string",
+        "default": "",
+        "options": [
+          "",
+          "TENCENT_HN1",
+          "TENCENT_HN10",
+          "TENCENT_NJ100",
+          "TENCENT_GZ100",
+          "TENCENT_CQ100",
+          "TENCENT_TJ100",
+          "TENCENT_TJ101",
+          "TENCENT_BGP2"
+        ],
+        "labels": [
+          "跟随客户端当前大区",
+          "艾欧尼亚",
+          "黑色玫瑰",
+          "联盟一区",
+          "联盟二区",
+          "联盟三区",
+          "联盟四区",
+          "联盟五区",
+          "峡谷之巅"
+        ]
+      },
+      "servers_extra": {
+        "description": "额外大区名称",
+        "type": "text",
+        "default": "",
+        "hint": "League Akari 新增大区时使用，每行 TENCENT_XXX=名称；对应的 SGP 地址填在 bridge.json 的 sgp_servers"
+      }
+    }
+  },
+  "local_api": {
+    "description": "本地 HTTP 接口",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用本地接口",
+        "type": "bool",
+        "default": false
+      },
+      "host": {
+        "description": "监听地址",
+        "type": "string",
+        "default": "127.0.0.1",
+        "hint": "非 127.0.0.1 时必须设置 Token"
+      },
+      "port": {
+        "description": "端口",
+        "type": "int",
+        "default": 6197
+      },
+      "token": {
+        "description": "访问 Token",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "请求头 Authorization: Bearer <token> 或 ?token="
+      },
+      "allow_push": {
+        "description": "允许通过接口让机器人发消息",
+        "type": "bool",
+        "default": false
+      },
+      "allow_mcp_passthrough": {
+        "description": "允许透传 OP.GG MCP 调用",
+        "type": "bool",
+        "default": false
+      }
+    }
+  },
+  "push": {
+    "description": "主动推送",
+    "type": "object",
+    "items": {
+      "enabled": {
+        "description": "启用推送",
+        "type": "bool",
+        "default": true
+      },
+      "match_interval_min": {
+        "description": "新对局检查间隔（分钟）",
+        "type": "int",
+        "default": 5
+      },
+      "max_new_matches": {
+        "description": "单次最多推送新对局数",
+        "type": "int",
+        "default": 3
+      },
+      "esports_interval_min": {
+        "description": "赛程检查间隔（分钟）",
+        "type": "int",
+        "default": 10
+      },
+      "esports_remind_min": {
+        "description": "开赛前多少分钟提醒",
+        "type": "int",
+        "default": 30
+      },
+      "daily_hour": {
+        "description": "日报推送时刻（0-23 点）",
+        "type": "int",
+        "default": 10
+      },
+      "group_admin_only": {
+        "description": "群聊仅管理员可订阅",
+        "type": "bool",
+        "default": false
+      }
+    }
+  },
+  "aliases": {
+    "description": "别名",
+    "type": "object",
+    "items": {
+      "champion_aliases": {
+        "description": "英雄自定义别名",
+        "type": "text",
+        "default": "",
+        "hint": "每行 别名=英文ID，例如 托儿索=Yasuo、小鱼=Fizz。英文 ID 见 Data Dragon"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "host": "127.0.0.1",
+  "port": 6198,
+  "token": "首次运行会自动生成",
+  "lockfile": "",
+  "install_dir": "",
+  "sgp_verify_tls": true,
+  "sgp_servers": {},
+  "allow_raw_lcu": false,
+  "request_timeout": 15,
+  "log_level": "INFO"
+}
+
