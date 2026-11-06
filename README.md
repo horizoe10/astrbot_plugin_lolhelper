@@ -21,9 +21,9 @@
 
 | 📜 战绩列表 | ⚔️ 单局详情 |
 |:---:|:---:|
-| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/matches.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/game.jpg" width="380"> |
+| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/matches-v2.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/game-v2.jpg" width="380"> |
 | **📈 版本梯队** | **♟️ 云顶阵容** |
-| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tier.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tft-deck.jpg" width="380"> |
+| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tier-v2.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tft-deck-v2.jpg" width="380"> |
 | **🎬 赛况（每局数据）** | **🏆 赛程（多赛事）** |
 | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-match.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-schedule.jpg" width="380"> |
 
