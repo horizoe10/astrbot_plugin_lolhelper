@@ -63,7 +63,6 @@ class Settings:
     image_quality: int = 85
     image_fallback_markdown: bool = True
     image_inline_icons: bool = True
-    show_footer: bool = True
     # query
     default_region: str = "kr"
     match_count: int = 8
@@ -76,20 +75,15 @@ class Settings:
     ttl_matches: float = 120
     ttl_esports: float = 300
     ttl_tft: float = 3600
-    # china
+    # china (empty bridge url = built-in, talks to the client on this machine)
     cn_enabled: bool = True
-    cn_bridge_url: str = "http://127.0.0.1:6198"
+    cn_bridge_url: str = ""
     cn_bridge_token: str = ""
     cn_timeout: float = 15
     cn_default_server: str = ""
     cn_servers_extra: dict[str, tuple[str, str]] = field(default_factory=dict)
-    # local api
-    api_enabled: bool = False
-    api_host: str = "127.0.0.1"
-    api_port: int = 6197
-    api_token: str = ""
-    api_allow_push: bool = False
-    api_allow_mcp: bool = False
+    # esports
+    esports_default_leagues: list[str] = field(default_factory=list)
     # push
     push_enabled: bool = True
     push_match_interval: float = 300
@@ -98,6 +92,7 @@ class Settings:
     push_daily_hour: int = 10
     push_max_new_matches: int = 3
     push_group_admin_only: bool = False
+    push_esports_game_data: bool = True
     # aliases
     champion_aliases: dict[str, str] = field(default_factory=dict)
 
@@ -106,14 +101,13 @@ class Settings:
         conf = conf or {}
         s = cls()
         ds, net, out, q, cache = (_group(conf, k) for k in ("data_source", "network", "output", "query", "cache"))
-        cn, api, push, al = (_group(conf, k) for k in ("cn", "local_api", "push", "aliases"))
+        cn, es, push, al = (_group(conf, k) for k in ("cn", "esports", "push", "aliases"))
 
         def g(d: dict, key: str, default):
             v = d.get(key, default)
             return default if v is None or v == "" and not isinstance(default, str) else v
 
         s.mcp_endpoint = g(ds, "mcp_endpoint", s.mcp_endpoint) or s.mcp_endpoint
-        s.lang = g(ds, "lang", s.lang) or s.lang
         s.timeout = float(g(ds, "timeout", s.timeout))
         s.concurrency = int(g(ds, "concurrency", s.concurrency))
         s.min_interval = float(g(ds, "min_interval_ms", 150)) / 1000
@@ -135,7 +129,6 @@ class Settings:
         s.image_quality = int(g(out, "image_quality", s.image_quality))
         s.image_fallback_markdown = bool(g(out, "image_fallback_markdown", s.image_fallback_markdown))
         s.image_inline_icons = bool(g(out, "inline_icons", s.image_inline_icons))
-        s.show_footer = bool(g(out, "show_footer", s.show_footer))
 
         s.default_region = str(g(q, "default_region", s.default_region)).lower() or "kr"
         s.match_count = int(g(q, "match_count", s.match_count))
@@ -152,16 +145,18 @@ class Settings:
         s.cn_enabled = bool(g(cn, "enabled", s.cn_enabled))
         s.cn_bridge_url = str(g(cn, "bridge_url", s.cn_bridge_url)).strip()
         s.cn_bridge_token = str(g(cn, "bridge_token", "")).strip()
+        if s.cn_bridge_url.rstrip("/") in ("http://127.0.0.1:6198", "http://localhost:6198") and not s.cn_bridge_token \
+                and "token=" not in s.cn_bridge_url:
+            s.cn_bridge_url = ""  # old default address without a token: use the built-in connection
         s.cn_timeout = float(g(cn, "timeout", s.cn_timeout))
         s.cn_default_server = str(g(cn, "default_server", "")).strip()
         s.cn_servers_extra = {k.upper(): (v, "") for k, v in _lines_to_map(g(cn, "servers_extra", "")).items()}
 
-        s.api_enabled = bool(g(api, "enabled", s.api_enabled))
-        s.api_host = str(g(api, "host", s.api_host)) or "127.0.0.1"
-        s.api_port = int(g(api, "port", s.api_port))
-        s.api_token = str(g(api, "token", "")).strip()
-        s.api_allow_push = bool(g(api, "allow_push", s.api_allow_push))
-        s.api_allow_mcp = bool(g(api, "allow_mcp_passthrough", s.api_allow_mcp))
+        from .args import parse_leagues
+
+        dl = g(es, "default_leagues", [])
+        words = [str(x).strip() for x in dl] if isinstance(dl, list) else str(dl).replace(",", " ").split()
+        s.esports_default_leagues = parse_leagues([w for w in words if w])[0]
 
         s.push_enabled = bool(g(push, "enabled", s.push_enabled))
         s.push_match_interval = max(60.0, float(g(push, "match_interval_min", 5)) * 60)
@@ -170,6 +165,7 @@ class Settings:
         s.push_daily_hour = int(g(push, "daily_hour", s.push_daily_hour)) % 24
         s.push_max_new_matches = int(g(push, "max_new_matches", s.push_max_new_matches))
         s.push_group_admin_only = bool(g(push, "group_admin_only", s.push_group_admin_only))
+        s.push_esports_game_data = bool(g(push, "esports_game_data", s.push_esports_game_data))
 
         s.champion_aliases = _lines_to_map(g(al, "champion_aliases", ""))
         return s

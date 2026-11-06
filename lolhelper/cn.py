@@ -1,10 +1,19 @@
-"""China (Tencent) server support through the local bridge (bridge/cn_bridge.py)."""
+"""China (Tencent) server support.
+
+Built-in mode: bridge/cn_bridge.py is loaded in-process and talks to the League
+client on this machine. Remote mode: the same script runs on the gaming PC and
+the plugin calls it over HTTP (address may carry the token: http://ip:6198?token=xxx).
+"""
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import logging
 import time
+from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import aiohttp
 
@@ -17,22 +26,79 @@ from .net import HttpClient
 from .service import OpggService, View, rank_tile
 
 
+BRIDGE_FILE = Path(__file__).resolve().parent.parent / "bridge" / "cn_bridge.py"
+REMOTE_HINT = "若 AstrBot 不在登录国服客户端的电脑上，请在那台电脑运行 bridge/start_bridge.bat，并把它显示的地址填到插件配置「远程国服代理」"
+
+
+def parse_remote(url: str, token: str = "") -> tuple[str, str]:
+    """Split "http://host:6198?token=xxx" (or "#xxx") into base URL and token."""
+    url = (url or "").strip()
+    if not url:
+        return "", token or ""
+    if "://" not in url:
+        url = "http://" + url
+    parts = urlsplit(url)
+    tok = (parse_qs(parts.query).get("token") or [""])[0] or parts.fragment or token or ""
+    base = urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/"), "", ""))
+    return base, tok
+
+
 class CnBridgeClient:
-    def __init__(self, http: HttpClient, url: str, token: str = "", timeout: float = 15):
+    def __init__(self, http: HttpClient, url: str = "", token: str = "", timeout: float = 15,
+                 bridge_file: Path | None = None, logger: logging.Logger | None = None):
         self.http = http
-        self.url = (url or "").rstrip("/")
-        self.token = token or ""
+        self.url, self.token = parse_remote(url, token)
         self.timeout = aiohttp.ClientTimeout(total=timeout)
+        self.request_timeout = timeout
+        self.bridge_file = Path(bridge_file or BRIDGE_FILE)
+        self.logger = logger or logging.getLogger("lolhelper")
+        self._mod = None
+        self._bridge = None
 
     @property
     def configured(self) -> bool:
-        return bool(self.url)
+        return True
+
+    @property
+    def mode(self) -> str:
+        return "remote" if self.url else "builtin"
+
+    @property
+    def label(self) -> str:
+        return self.url or "内置（本机客户端）"
+
+    def _local(self):
+        if self._bridge is None:
+            if not self.bridge_file.exists():
+                raise BridgeError(f"缺少国服代理脚本 {self.bridge_file}")
+            spec = importlib.util.spec_from_file_location("lolhelper_cn_bridge", self.bridge_file)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            cfg = dict(mod.DEFAULT_CONFIG)
+            cfg["request_timeout"] = self.request_timeout
+            self._mod, self._bridge = mod, mod.Bridge(cfg)
+        return self._mod, self._bridge
+
+    async def _get_local(self, path: str, params: dict[str, str]) -> Any:
+        mod, bridge = self._local()
+        name = mod.ROUTES.get(path)
+        if not name:
+            raise BridgeError(f"国服代理不支持 {path}")
+        try:
+            return await asyncio.to_thread(getattr(bridge, name), params)
+        except mod.BridgeError as exc:
+            if getattr(exc, "status", 0) == 404:
+                raise NotFoundError(str(exc)) from exc
+            msg = str(exc)
+            if getattr(exc, "code", "") == "client_not_found":
+                msg = f"{msg}。{REMOTE_HINT}"
+            raise BridgeError(msg) from exc
 
     async def get(self, path: str, **params: Any) -> Any:
-        if not self.url:
-            raise BridgeError("未配置国服本地代理地址（插件配置 cn.bridge_url）")
-        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
         clean = {k: str(v) for k, v in params.items() if v not in (None, "")}
+        if not self.url:
+            return await self._get_local(path, clean)
+        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
         try:
             async with self.http.session.get(
                 f"{self.url}{path}", params=clean, headers=headers, timeout=self.timeout, proxy=None
@@ -42,14 +108,14 @@ class CnBridgeClient:
                 except Exception:
                     body = {"ok": False, "error": (await resp.text())[:200]}
         except (aiohttp.ClientError, TimeoutError) as exc:
-            raise BridgeError(f"连接国服本地代理失败：{type(exc).__name__}（{self.url}）") from exc
+            raise BridgeError(f"连接远程国服代理失败：{type(exc).__name__}（{self.url}）") from exc
         if resp.status == 401:
-            raise BridgeError("国服本地代理 Token 错误，请检查 cn.bridge_token")
+            raise BridgeError("远程国服代理 Token 错误，请重新复制代理窗口里显示的完整地址（含 ?token=）")
         if not isinstance(body, dict) or not body.get("ok"):
             msg = (body or {}).get("error") if isinstance(body, dict) else str(body)
             if resp.status == 404:
                 raise NotFoundError(msg or "未找到")
-            raise BridgeError(msg or f"国服本地代理返回 HTTP {resp.status}")
+            raise BridgeError(msg or f"远程国服代理返回 HTTP {resp.status}")
         return body.get("data")
 
     async def status(self) -> dict:
@@ -295,13 +361,14 @@ class CnService:
 
     async def status_view(self) -> View:
         st = await self.bridge.status()
-        doc = Doc(title="国服本地代理状态", subtitle=self.bridge.url, theme="cn")
+        doc = Doc(title="国服连接状态", subtitle=self.bridge.label, theme="cn")
         doc.badge("已连接客户端" if st.get("connected") else "未连接客户端", "win" if st.get("connected") else "lose")
         cur = st.get("current") or {}
         doc.add_kv(
             "",
             [
-                ("代理版本", st.get("version")),
+                ("连接方式", "远程代理" if self.bridge.mode == "remote" else "内置"),
+                ("版本", st.get("version")),
                 ("当前大区", f"{st.get('server_name') or '-'}（{st.get('server') or '-'}）"),
                 ("登录账号", f"{cur.get('gameName')}#{cur.get('tagLine')}" if cur.get("gameName") else "-"),
                 ("战绩令牌", "正常" if st.get("token_entitlements") else "缺失"),
@@ -310,5 +377,7 @@ class CnService:
                 ("错误", st.get("error")),
             ],
         )
+        if not st.get("connected") and self.bridge.mode == "builtin":
+            doc.add_text("", REMOTE_HINT)
         return View("cn_status", st, doc, time.time())
 

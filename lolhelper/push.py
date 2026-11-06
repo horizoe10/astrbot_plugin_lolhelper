@@ -199,6 +199,8 @@ class PushManager:
 
     async def result_view(self, g: dict) -> View | None:
         """Series card with per-game stats, or None while OP.GG has not published every game yet."""
+        if not self.f.s.push_esports_game_data:
+            return self.esports_view(g, "比赛结束")
         try:
             games, _ = await self.f.svc.esports_series_games(g)
         except LolHelperError as exc:

@@ -11,7 +11,7 @@
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
 
-📊 OP.GG 数据 · 🖼️ 三种推送 · 🇨🇳 国服战绩 · 🏆 赛事赛况 · 🔔 主动推送 · 🔌 本地接口
+📊 OP.GG 数据 · 🖼️ 三种推送 · 🇨🇳 国服战绩 · 🏆 赛事赛况 · 🔔 主动推送
 
 </div>
 
@@ -113,52 +113,41 @@ flowchart LR
 
 ## 🇨🇳 国服接入
 
-OP.GG 不收录国服，需要在**登录国服客户端的电脑**上运行插件自带的代理（参考 League Akari 的 LCU + SGP 方案）。
+OP.GG 不收录国服，插件通过登录着的国服客户端查询（参考 League Akari 的 LCU + SGP 方案）。
 
 ```mermaid
 flowchart LR
-  U[💬 群聊] --> B[🤖 AstrBot<br/>联盟助手]
-  B -- HTTP + Token --> P[🧩 bridge/cn_bridge.py]
-  P -- lockfile --> L[🎮 国服客户端 LCU]
-  P -- 令牌 --> S[🛰️ SGP 战绩服务]
+  B[🤖 联盟助手] --> Q{同一台电脑<br/>有国服客户端?}
+  Q -->|是 · 内置| L[🎮 国服客户端 LCU]
+  Q -->|否 · 远程代理| P[🧩 游戏电脑上的<br/>start_bridge.bat]
+  P --> L
+  L -- 令牌 --> S[🛰️ SGP 战绩服务]
 ```
 
-| 步骤 | 操作 |
-|:---:|---|
-| 1️⃣ | 运行 `bridge/start_bridge.bat`，首次启动生成 Token |
-| 2️⃣ | 插件配置 `cn.bridge_url` / `cn.bridge_token` |
-| 3️⃣ | `/lol 国服状态` 检查，`/lol 绑定国服 名字#编号 艾欧尼亚` |
+| 部署方式 | 需要做什么 |
+|---|---|
+| 🖥️ AstrBot 和国服客户端在同一台 Windows 电脑 | 什么都不用配，登录客户端即可 |
+| ☁️ AstrBot 在服务器 / Docker / NAS | 游戏电脑双击 `bridge/start_bridge.bat`，把窗口显示的地址（含 `?token=`）填到「国服 → 远程国服代理」 |
+
+然后 `/lol 国服状态` 检查连接，`/lol 绑定国服 名字#编号 艾欧尼亚` 绑定账号。
 
 > 💡 大区支持名称、ID 和合并前的旧大区名（祖安 → 联盟一区）。战绩可跨区查询，段位仅限客户端所在大区。
 
-## 🔌 本地接口
-
-启用 `local_api` 后监听 `127.0.0.1:6197`，所有 GET 接口支持 `format=json|text|markdown|html|image`。
-
-| 路径 | 参数 |
-|---|---|
-| `/api/v1/lol/champion` | `name` `position` `mode` |
-| `/api/v1/lol/tier` | `position` |
-| `/api/v1/lol/summoner` · `/lol/game` | `riot_id` `region` `count` / `index` |
-| `/api/v1/lol/esports` · `/lol/standings` | `mode` `league`（逗号分隔多个） |
-| `/api/v1/lol/esports/match` | `index` / `team` / `match_id` · `game` · `league` |
-| `/api/v1/tft/meta` · `deck` · `champion` · `item` · `augment` | `limit` / `index` / `name` / `q` |
-| `POST /api/v1/push` · `/mcp/call` | 默认关闭 |
-
-```bash
-curl -H "Authorization: Bearer TOKEN" "http://127.0.0.1:6197/api/v1/lol/tier?position=mid&format=image" -o tier.jpg
-```
-
 ## ⚙️ 配置
 
-| 分组 | 常用项 |
+默认值开箱即用，WebUI 只显示常用的 17 项：
+
+| 分组 | 配置项 |
 |---|---|
-| 🌐 `network` | `proxy` 出站代理（国内访问 OP.GG 建议填写） |
-| 🖼️ `output` | `default_mode` · `image_renderer` · `image_theme` |
-| 🔎 `query` | `default_region` · `match_count` · `match_details` |
-| 🇨🇳 `cn` | `bridge_url` · `bridge_token` · `default_server` |
-| 🔔 `push` | 检查间隔 · 开赛提醒 · 日报时刻 |
-| 🔌 `local_api` | `host` · `port` · `token` |
+| 🌐 网络 | 出站代理（国内访问 OP.GG 建议填写） |
+| 🖼️ 输出 | 默认输出方式 · 图片主题 · 支持 Markdown 的平台 |
+| 🔎 查询 | 外服默认大区 · 战绩默认场次 |
+| 🇨🇳 国服 | 启用 · 默认大区 · 远程国服代理（可选） |
+| 🏆 赛事 | 赛程默认赛事（未订阅的会话默认只看这些） |
+| 🔔 推送 | 启用 · 新对局检查间隔 · 开赛提醒 · 赛果附带每局数据 · 日报时刻 · 仅管理员订阅 |
+| 🏷️ 别名 | 英雄自定义别名 |
+
+> 🔧 数据源地址、缓存时长、渲染细节等高级项已隐藏，需要时可在 `data/config/astrbot_plugin_lolhelper_config.json` 中修改。
 
 <details>
 <summary>📦 安装与开发</summary>
@@ -184,9 +173,9 @@ lolhelper/            核心包（不依赖 AstrBot）
   esports.py                赛事每局数据（esports.op.gg）
   cn.py                     国服代理客户端
   render/ doc.py            文本 / Markdown / HTML / 图片渲染
-  facade.py push.py api_server.py
+  facade.py push.py
 templates/card.html   图片模板
-bridge/               国服本地代理（零依赖）
+bridge/               国服远程代理（零依赖，插件也直接内置调用）
 ```
 
 </details>

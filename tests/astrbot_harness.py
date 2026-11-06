@@ -183,7 +183,7 @@ async def main() -> int:
     runner, bridge_url = await start_fake_bridge()
     ctx = FakeContext()
     await ctx.html_renderer.initialize()
-    conf = {"cn": {"bridge_url": bridge_url, "bridge_token": "tk"}, "local_api": {"enabled": True, "port": 16197, "token": "apitk"}}
+    conf = {"cn": {"bridge_url": f"{bridge_url}?token=tk"}}
     plugin = mod.LolHelperPlugin(ctx, conf)
     await plugin.initialize()
 
@@ -267,20 +267,8 @@ async def main() -> int:
     await plugin._push_send("testbot:GroupMessage:g1", view, "text")
     check(ctx.sent and "赢下了一局" in ctx.sent[-1][1].chain[0].text, "push message sent via context")
 
-    # local API
-    import aiohttp
-
-    async with aiohttp.ClientSession() as s:
-        async with s.get("http://127.0.0.1:16197/api/v1/lol/tier?position=mid&format=markdown", headers={"Authorization": "Bearer apitk"}) as r:
-            body = await r.text()
-            check(r.status == 200 and "| # | 英雄 |" in body, "local api markdown")
-        async with s.get("http://127.0.0.1:16197/api/v1/lol/summoner?riot_id=测试玩家%2312345&region=艾欧尼亚&format=json", headers={"Authorization": "Bearer apitk"}) as r:
-            body = await r.json()
-            check(r.status == 200 and body["view"] == "cn_summoner", "local api cn summoner")
-        async with s.get("http://127.0.0.1:16197/api/v1/tft/meta?format=image&limit=5", headers={"Authorization": "Bearer apitk"}) as r:
-            data = await r.read()
-            check(r.status == 200 and r.content_type.startswith("image/") and len(data) > 10000, f"local api image ({len(data)} bytes)")
-            (WORK / "api_tft_meta.jpg").write_bytes(data)
+    # remote CN bridge address with the token in the URL
+    check(plugin.f.bridge.mode == "remote" and plugin.f.bridge.token == "tk", "remote cn address carries token")
 
     await plugin.terminate()
     await runner.cleanup()

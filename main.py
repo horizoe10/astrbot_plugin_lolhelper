@@ -10,7 +10,6 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
 from .lolhelper import PLUGIN_NAME, VERSION
-from .lolhelper.api_server import ApiServer
 from .lolhelper.args import MODE_WORDS, parse_args, parse_leagues, parse_target, pick_game_mode, pick_position
 from .lolhelper.constants import (
     CN_LEGACY_SERVERS,
@@ -50,7 +49,7 @@ HELP = """联盟助手 v{version}
 
 账号与设置
 /lol 绑定 名字#标签 [大区]        外服默认 {region}
-/lol 绑定国服 名字#编号 [大区]    需要国服本地代理
+/lol 绑定国服 名字#编号 [大区]    需登录国服客户端（本机或远程代理）
 /lol 账号 | 切换 <序号> | 解绑 [序号]
 /lol 模式 [文本|md|图片|默认]
 /lol 订阅 战绩|赛事 [联赛…]|梯队|云顶
@@ -74,21 +73,14 @@ class LolHelperPlugin(Star):
         data_dir = StarTools.get_data_dir(PLUGIN_NAME)
         self.f = Facade(self.settings, data_dir, html_render=self.html_render, logger=logger)
         self.push = PushManager(self.f, self._push_send, logger)
-        self.api = ApiServer(self.f, self._api_push, logger)
 
     async def initialize(self) -> None:
         await self.f.start()
         self.push.start()
-        if self.settings.api_enabled:
-            try:
-                await self.api.start()
-            except OSError as exc:
-                logger.error(f"[lolhelper] 本地接口启动失败：{exc}")
         logger.info(f"[lolhelper] 联盟助手 v{VERSION} 已加载")
 
     async def terminate(self) -> None:
         await self.push.stop()
-        await self.api.stop()
         await self.f.close()
 
     # =============================================================== helpers
@@ -173,9 +165,6 @@ class LolHelperPlugin(Star):
             chain = chain.message(self.f.text(view))
         chain.use_t2i(False)
         await self.context.send_message(umo, chain)
-
-    async def _api_push(self, umo: str, view: View, mode: str | None) -> None:
-        await self._push_send(umo, view, mode if mode in MODE_ZH else None)
 
     async def _account_for(self, event: AstrMessageEvent, words: list[str]) -> dict:
         if any("#" in w or "＃" in w for w in words):
@@ -483,11 +472,11 @@ class LolHelperPlugin(Star):
         intl = " ".join(f"{k}({v})" for k, v in OPGG_REGIONS.items())
         cn = " ".join(f"{v[0]}({k.split('_', 1)[1]})" for k, v in CN_SERVERS.items())
         legacy = "、".join(CN_LEGACY_SERVERS)
-        yield self._plain(event, f"外服（OP.GG）：{intl}\n\n国服（本地代理）：{cn}\n\n旧大区自动映射：{legacy}")
+        yield self._plain(event, f"外服（OP.GG）：{intl}\n\n国服：{cn}\n\n旧大区自动映射：{legacy}")
 
     @lol.command("国服状态", alias={"cn", "代理状态"})
     async def lol_cn_status(self, event: AstrMessageEvent):
-        """检查国服本地代理"""
+        """检查国服客户端连接"""
         a = parse_args(self._rest(event, {"国服状态", "cn", "代理状态"}))
         yield await self._answer(event, self.f.cn_status, a.mode or "text")
 
@@ -587,8 +576,7 @@ class LolHelperPlugin(Star):
             f"OP.GG MCP：{len(self.f.mcp.tools)} 个工具" + ("" if self.f.mcp.tools else "（尚未连接）"),
             f"Data Dragon：{self.f.gd.version or '未加载'}",
             f"默认输出：{MODE_ZH[s.default_mode]}　本会话：{MODE_ZH.get(self.f.store.mode(event.unified_msg_origin) or '', '跟随默认')}",
-            f"国服代理：{'已启用 ' + s.cn_bridge_url if s.cn_enabled else '未启用'}",
-            f"本地接口：{'http://%s:%s' % (s.api_host, s.api_port) if s.api_enabled else '未启用'}",
+            f"国服：{self.f.bridge.label if s.cn_enabled else '未启用'}",
             f"订阅总数：{len(self.f.store.data['subs'])}",
         ]
         yield self._plain(event, "\n".join(lines))

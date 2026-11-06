@@ -16,9 +16,19 @@ def defaults_from_schema() -> dict:
 def test_settings_from_schema_defaults():
     s = Settings.from_config(defaults_from_schema())
     assert s.default_mode == "image" and s.default_region == "kr"
-    assert s.cn_bridge_url == "http://127.0.0.1:6198"
+    assert s.cn_bridge_url == ""  # built-in: talk to the client on this machine
+    assert s.push_esports_game_data and s.esports_default_leagues == []
     assert s.ttl_meta == 180 * 60 and s.push_match_interval == 300
     assert "telegram" in s.markdown_platforms
+
+
+def test_settings_cn_and_esports_migration():
+    old = Settings.from_config({"cn": {"bridge_url": "http://127.0.0.1:6198", "bridge_token": ""}})
+    assert old.cn_bridge_url == ""  # old default without token -> built-in
+    remote = Settings.from_config({"cn": {"bridge_url": "http://127.0.0.1:6198", "bridge_token": "tk"}})
+    assert remote.cn_bridge_url == "http://127.0.0.1:6198"
+    es = Settings.from_config({"esports": {"default_leagues": ["S赛", "LPL", "火星联赛"]}})
+    assert es.esports_default_leagues == ["worlds", "lpl"]
 
 
 def test_settings_parsing():

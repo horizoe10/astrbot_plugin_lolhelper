@@ -72,7 +72,7 @@ class Facade:
         )
         self.tft = TftService(self.svc)
         self.svc.esp = EsportsClient(self.http)
-        self.bridge = CnBridgeClient(self.http, settings.cn_bridge_url, settings.cn_bridge_token, settings.cn_timeout)
+        self.bridge = CnBridgeClient(self.http, settings.cn_bridge_url, settings.cn_bridge_token, settings.cn_timeout, logger=self.logger)
         self.cn = CnService(self.bridge, self.svc, self.logger)
         self.store = StateStore(self.data_dir / "state.json")
         self.images = ImageRenderer(
@@ -174,11 +174,12 @@ class Facade:
         return await self.svc.esports(mode, league, limit=max(self.s.text_max_rows, 12))
 
     def sub_leagues(self, umo: str | None) -> list[str] | None:
-        """Leagues this session subscribed to; None when not subscribed or subscribed to all."""
-        if not umo:
-            return None
+        """Default leagues for a session: its esports subscriptions, else the configured defaults; None = all."""
+        subs = self.store.subs(umo=umo, kind="esports") if umo else []
+        if not subs:
+            return list(self.s.esports_default_leagues) or None
         leagues: list[str] = []
-        for s in self.store.subs(umo=umo, kind="esports"):
+        for s in subs:
             got = sub_league_list(s)
             if not got:
                 return None
@@ -195,8 +196,6 @@ class Facade:
         return await self.svc.standings(league)
 
     async def cn_status(self) -> View:
-        if not self.bridge.configured:
-            raise BridgeError("未配置国服本地代理地址（插件配置 cn.bridge_url）")
         return await self.cn.status_view()
 
     async def refresh(self) -> None:
@@ -206,10 +205,10 @@ class Facade:
 
     # ---------------------------------------------------------------- rendering
     def text(self, view: View) -> str:
-        return render_text(view.doc, self.s.text_max_rows, self.s.show_footer)
+        return render_text(view.doc, self.s.text_max_rows)
 
     def markdown(self, view: View) -> str:
-        return render_markdown(view.doc, self.s.text_max_rows, self.s.show_footer)
+        return render_markdown(view.doc, self.s.text_max_rows)
 
     async def image(self, view: View, umo: str | None = None, want_file: bool = False) -> str:
         return await self.images.render(view.doc, umo, want_file)

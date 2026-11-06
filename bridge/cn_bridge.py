@@ -41,7 +41,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.0"
+VERSION = "1.1"
 log = logging.getLogger("lolhelper-cn-bridge")
 
 # Same table as League Akari builtin.ts (BUILTIN_SGP_LEAGUE_SERVERS_CONFIG).
@@ -58,7 +58,7 @@ SGP_SERVERS = {
 }
 
 DEFAULT_CONFIG = {
-    "host": "127.0.0.1",
+    "host": "0.0.0.0",
     "port": 6198,
     "token": "",
     "lockfile": "",
@@ -498,6 +498,17 @@ def make_handler(bridge: Bridge, token: str):
     return Handler
 
 
+def _lan_ip() -> str:
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))
+            return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
 def load_config(path: Path) -> dict:
     cfg = dict(DEFAULT_CONFIG)
     if path.exists():
@@ -532,7 +543,11 @@ def main(argv=None) -> int:
         return 0
     server = ThreadingHTTPServer((cfg["host"], int(cfg["port"])), make_handler(bridge, cfg["token"]))
     print(f"[bridge] v{VERSION} 监听 http://{cfg['host']}:{cfg['port']}")
-    print(f"[bridge] Token: {cfg['token']}  （填入插件配置 cn.bridge_token）")
+    shown = _lan_ip() if cfg["host"] in ("0.0.0.0", "::", "") else cfg["host"]
+    print("[bridge] 把下面这行完整地址填到插件配置「国服 → 远程国服代理」：")
+    print(f"         http://{shown}:{cfg['port']}?token={cfg['token']}")
+    if cfg["host"] in ("127.0.0.1", "localhost"):
+        print("[bridge] 当前只允许本机访问；AstrBot 在其他机器上时，把 bridge.json 的 host 改为 0.0.0.0 后重启")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
