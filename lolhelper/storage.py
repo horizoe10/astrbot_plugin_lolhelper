@@ -20,6 +20,14 @@ def account_key(acc: dict) -> str:
     return f"g:{acc.get('region', '')}:{str(acc.get('game_name', '')).lower()}#{str(acc.get('tag_line', '')).lower()}"
 
 
+def sub_league_list(sub: dict) -> list[str]:
+    """Leagues of an esports subscription; [] means every league. Supports the old single-league form."""
+    t = sub.get("target") or {}
+    if t.get("leagues"):
+        return [str(x) for x in t["leagues"]]
+    return [str(t["league"])] if t.get("league") else []
+
+
 def account_label(acc: dict) -> str:
     rid = f"{acc.get('game_name')}#{acc.get('tag_line')}"
     if acc.get("kind") == "cn":

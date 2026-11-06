@@ -34,7 +34,8 @@
 | 📈 | 分路梯队 · 胜率 / 登场 / 禁用 | 🗡️ | 英雄三件套（登顶率前三） |
 | 📜 | 战绩列表（10 人 · 参团 · 标签） | 🎒 | 装备适配英雄 |
 | ⚔️ | 单局详情（伤害 / 承伤条 · 出装） | 🔮 | 强化符文搜索 |
-| 🏆 | 电竞赛程 · 赛果 · 积分榜 | | |
+| 🏆 | 电竞赛程 · 赛果 · 积分榜（多联赛合并） | | |
+| 🎬 | 赛况：每局阵容 · MVP · 资源 · 单局 10 人数据 | | |
 
 ## ⌨️ 指令
 
@@ -48,10 +49,11 @@
 | 📜 战绩 | `/lol 战绩 [名字#标签] [大区]` | `/lol 战绩 Hide on bush#KR1 kr` |
 | 🏅 资料 | `/lol 资料 [名字#标签] [大区]` | `/lol 资料 @某人` |
 | ⚔️ 对局 | `/lol 对局 [序号]` | `/lol 对局 2` |
-| 🏆 电竞 | `/lol 赛程` · `赛果` · `积分 <联赛>` | `/lol 积分 LPL` |
+| 🏆 电竞 | `/lol 赛程 [联赛…]` · `赛果 [联赛…]` · `积分 <联赛>` | `/lol 赛程 S赛 LPL` |
+| 🎬 赛况 | `/lol 赛况 [序号\|战队] [局号]` | `/lol 赛况 BLG 2` |
 | ♟️ 云顶 | `/tft 阵容 [序号]` · `英雄` · `装备` · `强化` | `/tft 装备 大天使` |
 | 🔗 绑定 | `/lol 绑定` · `绑定国服` · `账号` · `切换` · `解绑` | `/lol 绑定国服 名字#12345 艾欧尼亚` |
-| 🔔 订阅 | `/lol 订阅 战绩 \| 赛事 [联赛] \| 梯队 \| 云顶` | `/lol 订阅 赛事 LPL` |
+| 🔔 订阅 | `/lol 订阅 战绩 \| 赛事 [联赛…] \| 梯队 \| 云顶` | `/lol 订阅 赛事 S赛 LPL` |
 | ⚙️ 设置 | `/lol 模式` · `大区` · `国服状态` · `状态` · `帮助` | `/lol 模式 图片` |
 
 英雄支持中文名、称号、外号和英文名（亚索 / 疾风剑豪 / 快乐风男 / Yasuo）。
@@ -106,7 +108,8 @@ flowchart LR
 | `/api/v1/lol/champion` | `name` `position` `mode` |
 | `/api/v1/lol/tier` | `position` |
 | `/api/v1/lol/summoner` · `/lol/game` | `riot_id` `region` `count` / `index` |
-| `/api/v1/lol/esports` · `/lol/standings` | `mode` `league` |
+| `/api/v1/lol/esports` · `/lol/standings` | `mode` `league`（逗号分隔多个） |
+| `/api/v1/lol/esports/match` | `index` / `team` / `match_id` · `game` · `league` |
 | `/api/v1/tft/meta` · `deck` · `champion` · `item` · `augment` | `limit` / `index` / `name` / `q` |
 | `POST /api/v1/push` · `/mcp/call` | 默认关闭 |
 

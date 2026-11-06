@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
@@ -108,6 +109,14 @@ def _lane_fields(positions: list[str]) -> list[str]:
     ]
 
 
+LIVE_STATUS = ("RUNNING", "IN_PROGRESS", "LIVE", "STARTED")
+LEAGUE_LABEL = {"worlds": "Worlds", "first stand": "First Stand", "fst": "First Stand", "lta south": "LTA South", "lta north": "LTA North"}
+
+
+def league_label(key: str) -> str:
+    return LEAGUE_LABEL.get(key, key.upper())
+
+
 def versus_row(g: dict, tz: str) -> tuple[dict, str]:
     """One esports match as a symmetric home / score / away row plus a plain-text line."""
     home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
@@ -117,7 +126,7 @@ def versus_row(g: dict, tz: str) -> tuple[dict, str]:
     away_win = status == "FINISHED" and (as_ or 0) > (hs or 0)
     if status == "FINISHED":
         score, score_cls, state = f"{hs} : {as_}", "done", "已结束"
-    elif status in ("RUNNING", "IN_PROGRESS", "LIVE"):
+    elif status in LIVE_STATUS:
         score, score_cls, state = f"{hs or 0} : {as_ or 0}", "live", "进行中"
     else:
         score, score_cls, state = "VS", "todo", "未开始"
@@ -154,6 +163,7 @@ class OpggService:
         self.cfg = config or ServiceConfig()
         self.logger = logger or logging.getLogger("lolhelper")
         self.cache = TTLCache(1024)
+        self.esp = None  # EsportsClient, set by the facade
 
     async def _cached(self, key: str, ttl: float, tool: str, args: dict) -> tuple[Any, float]:
         return await self.cache.get_or_load(key, ttl, lambda: self.mcp.call(tool, args))
@@ -677,30 +687,95 @@ class OpggService:
         return view
 
     # ================================================================ esports
-    async def esports(self, mode: str = "schedule", league: str | None = None, limit: int = 10) -> View:
-        args: dict[str, Any] = {"mode": mode, "limit": 50}
-        if league:
-            args["league"] = league
-        raw, created = await self._cached(f"esports:{mode}:{league}", self.cfg.ttl_esports, "lol_esports_list_schedules", args)
-        games = raw if isinstance(raw, list) else (dig(raw, "data", []) or [])
-        if mode == "result":
-            games = sorted(games, key=lambda g: g.get("scheduledAt") or "", reverse=True)
-        else:
-            games = sorted(games, key=lambda g: g.get("scheduledAt") or "")
-        title = ("赛果" if mode == "result" else "赛程") + (f" · {league.upper()}" if league else "")
+    async def esports_games(self, mode: str, leagues: list[str] | None) -> tuple[list[dict], float]:
+        """Schedules or results for several leagues merged into one list (newest first for results)."""
+        async def one(league: str | None):
+            args: dict[str, Any] = {"mode": mode, "limit": 50}
+            if league:
+                args["league"] = league
+            raw, created = await self._cached(f"esports:{mode}:{league}", self.cfg.ttl_esports, "lol_esports_list_schedules", args)
+            return (raw if isinstance(raw, list) else (dig(raw, "data", []) or [])), created
+
+        parts = await asyncio.gather(*(one(lg) for lg in (leagues or [None])))
+        seen, games = set(), []
+        for gs, _ in parts:
+            for g in gs:
+                if g.get("id") in seen:
+                    continue
+                seen.add(g.get("id"))
+                games.append(g)
+        games.sort(key=lambda g: g.get("scheduledAt") or "", reverse=mode == "result")
+        return games, min(c for _, c in parts)
+
+    async def esports(self, mode: str = "schedule", league: str | list[str] | None = None, limit: int = 10) -> View:
+        leagues = [league] if isinstance(league, str) else list(league or [])
+        games, created = await self.esports_games(mode, leagues)
+        title = ("赛果" if mode == "result" else "赛程") + (" · " + " / ".join(league_label(x) for x in leagues) if leagues else "")
         doc = Doc(title=f"英雄联盟{title}", subtitle="时间为北京时间" if self.cfg.timezone == "Asia/Shanghai" else self.cfg.timezone, theme="esports")
         rows, vs_rows, lines = [], [], []
-        for g in games[:limit]:
+        for i, g in enumerate(games[:limit], 1):
             row, line = versus_row(g, self.cfg.timezone)
+            if mode == "result":
+                row["no"] = i
+                line = f"#{i} {line}"
             vs_rows.append(row)
             lines.append(line)
         if not vs_rows:
             doc.add_text("", "暂无" + ("近期赛果" if mode == "result" else "后续赛程"))
         else:
-            doc.add_block("", "versus", {"rows": vs_rows}, lines)
+            doc.add_block("", "versus", {"rows": vs_rows}, lines,
+                          note="发送「/lol 赛况 序号」查看每局阵容与数据" if mode == "result" else "")
         doc.footer = self._foot(created)
         doc.link = "https://esports.op.gg/schedules"
-        return View("lol_esports", {"mode": mode, "league": league, "games": games}, doc, created)
+        return View("lol_esports", {"mode": mode, "league": leagues[0] if len(leagues) == 1 else None, "leagues": leagues, "games": games}, doc, created)
+
+    async def esports_series_games(self, g: dict) -> tuple[list[dict], float]:
+        if self.esp is None:
+            raise UpstreamError("赛事数据接口未初始化")
+        status = str(g.get("status") or "").upper()
+        live = status in LIVE_STATUS
+        played = int(g.get("homeScore") or 0) + int(g.get("awayScore") or 0) + (1 if live else 0)
+        if played <= 0:
+            return [], time.time()
+        ttl = 60 if live else 6 * 3600
+        return await self.cache.get_or_load(f"esgames:{g.get('id')}:{played}", ttl, lambda: self.esp.games(g.get("id"), played))
+
+    async def esports_find(self, leagues: list[str] | None, index: int | None = None, team: str | None = None,
+                           match_id: str | None = None) -> dict:
+        if match_id:
+            from .esports import match_to_schedule
+
+            m = await self.esp.match(match_id) if self.esp else None
+            if not m:
+                raise NotFoundError(f"没有找到比赛 {match_id}")
+            return match_to_schedule(m)
+        results, _ = await self.esports_games("result", leagues)
+        if index:
+            if not 1 <= index <= len(results):
+                raise UsageError(f"最近只有 {len(results)} 场赛果，序号需要在 1~{len(results)} 之间")
+            return results[index - 1]
+        schedule, _ = await self.esports_games("schedule", leagues)
+        pool = [g for g in schedule if str(g.get("status") or "").upper() in LIVE_STATUS] + results
+        if team:
+            t = team.lower()
+            pool = [g for g in pool if any(t in (str(x.get("acronym") or "").lower(), str(x.get("name") or "").lower())
+                                           for x in (g.get("homeTeam") or {}, g.get("awayTeam") or {}))]
+            if not pool:
+                raise NotFoundError(f"最近没有找到 {team.upper()} 的比赛")
+        if not pool:
+            raise NotFoundError("最近没有比赛")
+        return pool[0]
+
+    async def esports_match(self, g: dict, game_no: int | None = None, headline: str = "", key: str = "") -> View:
+        from .esports import build_esports_game_view, build_series_view
+
+        games, created = await self.esports_series_games(g)
+        if game_no:
+            game = next((x for x in games if x.get("set") == game_no), None)
+            if not game:
+                raise NotFoundError(f"第 {game_no} 局暂无数据（本场共有 {len(games)} 局数据）")
+            return build_esports_game_view(g, game, self.gd, self.cfg.timezone, created)
+        return build_series_view(g, games, self.gd, self.cfg.timezone, created, headline, key)
 
     async def standings(self, league: str) -> View:
         raw, created = await self._cached(f"standings:{league}", self.cfg.ttl_esports, "lol_esports_list_team_standings", {"short_name": league})

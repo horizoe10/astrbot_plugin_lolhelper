@@ -15,7 +15,7 @@ from typing import Awaitable, Callable
 
 from aiohttp import web
 
-from .args import parse_target
+from .args import parse_leagues, parse_target
 from .constants import POSITION_ALIASES, resolve_league
 from .errors import BridgeError, NotFoundError, LolHelperError, UpstreamError, UsageError
 from .render.html import render_html
@@ -112,7 +112,14 @@ class ApiServer:
             return await f.game_detail(acc, count(q.get("index"), 1))
         if path == "lol/esports":
             mode = "result" if q.get("mode") == "result" else "schedule"
-            return await f.esports(mode, resolve_league(q.get("league", "")) if q.get("league") else None)
+            leagues, _ = parse_leagues(q.get("league", "").replace(",", " ").split())
+            return await f.esports(mode, leagues or None)
+        if path == "lol/esports/match":
+            leagues, _ = parse_leagues(q.get("league", "").replace(",", " ").split())
+            return await f.esports_match(
+                leagues or None, count(q.get("index"), 0) or None, q.get("team") or None,
+                q.get("match_id") or None, count(q.get("game"), 0) or None,
+            )
         if path == "lol/standings":
             league = resolve_league(q.get("league", "")) or q.get("league", "")
             if not league:

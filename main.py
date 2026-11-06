@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
@@ -9,7 +11,7 @@ from astrbot.api.star import Context, Star, StarTools
 
 from .lolhelper import PLUGIN_NAME, VERSION
 from .lolhelper.api_server import ApiServer
-from .lolhelper.args import MODE_WORDS, parse_args, parse_target, pick_game_mode, pick_position
+from .lolhelper.args import MODE_WORDS, parse_args, parse_leagues, parse_target, pick_game_mode, pick_position
 from .lolhelper.constants import (
     CN_LEGACY_SERVERS,
     CN_SERVERS,
@@ -22,7 +24,8 @@ from .lolhelper.facade import Facade
 from .lolhelper.push import SUB_TYPES, PushManager
 from .lolhelper.service import View
 from .lolhelper.settings import Settings
-from .lolhelper.storage import account_label
+from .lolhelper.service import league_label
+from .lolhelper.storage import account_label, sub_league_list
 
 MODE_ZH = {"text": "纯文本", "markdown": "Markdown", "image": "图片"}
 
@@ -35,7 +38,9 @@ HELP = """联盟助手 v{version}
 /lol 战绩 [名字#标签] [大区]     最近对局（可@已绑定的人）
 /lol 资料 [名字#标签] [大区]     段位与常用英雄
 /lol 对局 [序号] [名字#标签]     单局详情（双方 10 人）
-/lol 赛程 [联赛] | 赛果 [联赛] | 积分 <联赛>
+/lol 赛程 [联赛…] | 赛果 [联赛…]  可写多个，如 S赛 LPL；不写时按本会话订阅
+/lol 赛况 [序号|战队] [局号]     每局阵容与数据（序号对应赛果卡片）
+/lol 积分 <联赛>
 
 云顶之弈
 /tft 阵容 [序号]   版本阵容 / 单个阵容详情
@@ -48,7 +53,7 @@ HELP = """联盟助手 v{version}
 /lol 绑定国服 名字#编号 [大区]    需要国服本地代理
 /lol 账号 | 切换 <序号> | 解绑 [序号]
 /lol 模式 [文本|md|图片|默认]
-/lol 订阅 战绩|赛事 [联赛]|梯队|云顶
+/lol 订阅 战绩|赛事 [联赛…]|梯队|云顶
 /lol 订阅列表 | 退订 <ID|all>
 /lol 大区 | 国服状态
 
@@ -258,23 +263,59 @@ class LolHelperPlugin(Star):
 
     @lol.command("赛程", alias={"schedule"})
     async def lol_schedule(self, event: AstrMessageEvent):
-        """电竞赛程：/lol 赛程 [联赛]"""
+        """电竞赛程：/lol 赛程 [联赛…]"""
         a = parse_args(self._rest(event, {"赛程", "schedule"}))
-        league = resolve_league(a.rest) if a.rest else None
-        if a.rest and not league:
-            yield self._plain(event, f"未知联赛「{a.rest}」，例如 LPL / LCK / Worlds / MSI")
+        leagues, bad = self._leagues(event, a.words)
+        if bad:
+            yield self._plain(event, f"未知联赛「{' '.join(bad)}」，例如 LPL / LCK / S赛 / MSI")
             return
-        yield await self._answer(event, lambda: self.f.esports("schedule", league), a.mode)
+        yield await self._answer(event, lambda: self.f.esports("schedule", leagues), a.mode)
 
     @lol.command("赛果", alias={"result", "results"})
     async def lol_results(self, event: AstrMessageEvent):
-        """电竞赛果：/lol 赛果 [联赛]"""
+        """电竞赛果：/lol 赛果 [联赛…]"""
         a = parse_args(self._rest(event, {"赛果", "result", "results"}))
-        league = resolve_league(a.rest) if a.rest else None
-        if a.rest and not league:
-            yield self._plain(event, f"未知联赛「{a.rest}」，例如 LPL / LCK / Worlds / MSI")
+        leagues, bad = self._leagues(event, a.words)
+        if bad:
+            yield self._plain(event, f"未知联赛「{' '.join(bad)}」，例如 LPL / LCK / S赛 / MSI")
             return
-        yield await self._answer(event, lambda: self.f.esports("result", league), a.mode)
+        yield await self._answer(event, lambda: self.f.esports("result", leagues), a.mode)
+
+    @lol.command("赛况", alias={"比赛", "match"})
+    async def lol_match(self, event: AstrMessageEvent):
+        """比赛数据：/lol 赛况 [联赛…] [序号|战队] [局号]"""
+        a = parse_args(self._rest(event, {"赛况", "比赛", "match"}))
+        words = [w for w in a.words if w.upper() != "AL"]  # AL is both a league and a team; treat it as the team
+        leagues, rest = parse_leagues(words)
+        rest += [w for w in a.words if w.upper() == "AL"]
+        index = match_id = game_no = None
+        team = None
+        for w in rest:
+            m = re.fullmatch(r"(?:第|g|game)?(\d+)(?:局)?", w, re.I)
+            if m and (w[0] in "第gG" or w.endswith("局")):
+                game_no = int(m.group(1))
+            elif w.isdigit():
+                n = int(w)
+                if n >= 1000:
+                    match_id = w
+                elif index is None and team is None:
+                    index = n
+                else:
+                    game_no = n
+            else:
+                team = w
+        if team and index is not None and game_no is None:
+            index, game_no = None, index
+        leagues = leagues or (None if (match_id or team) else self.f.sub_leagues(event.unified_msg_origin))
+        yield await self._answer(event, lambda: self.f.esports_match(leagues, index, team, match_id, game_no), a.mode)
+
+    def _leagues(self, event: AstrMessageEvent, words: list[str]) -> tuple[list[str] | None, list[str]]:
+        if not words:
+            return self.f.sub_leagues(event.unified_msg_origin), []
+        if len(words) == 1 and words[0] in ("全部", "所有", "all"):
+            return None, []
+        leagues, bad = parse_leagues(words)
+        return leagues, bad
 
     @lol.command("积分", alias={"standings", "积分榜"})
     async def lol_standings(self, event: AstrMessageEvent):
@@ -480,12 +521,13 @@ class LolHelperPlugin(Star):
             sub, new = await self.f.store.add_sub(umo, "match", {"account": acc}, by)
             desc = f"{account_label(acc)} 的新对局"
         elif kind_word in ("赛事", "赛程", "比赛", "esports"):
-            league = resolve_league(a.words[1]) if len(a.words) > 1 else None
-            if len(a.words) > 1 and not league:
-                yield self._plain(event, f"未知联赛「{a.words[1]}」")
+            leagues, bad = parse_leagues(a.words[1:])
+            if bad:
+                yield self._plain(event, f"未知联赛「{' '.join(bad)}」，例如 LPL / LCK / S赛 / MSI")
                 return
-            sub, new = await self.f.store.add_sub(umo, "esports", {"league": league} if league else {}, by)
-            desc = f"{(league or '全部联赛').upper()} 开赛提醒与赛果"
+            target = {} if not leagues else {"league": leagues[0]} if len(leagues) == 1 else {"leagues": sorted(leagues)}
+            sub, new = await self.f.store.add_sub(umo, "esports", target, by)
+            desc = f"{' / '.join(league_label(x) for x in leagues) or '全部联赛'} 开赛提醒与赛果（含每局数据）"
         elif kind_word in ("梯队", "版本", "lol"):
             sub, new = await self.f.store.add_sub(umo, "lol_daily", {}, by)
             desc = f"每天 {self.settings.push_daily_hour}:00 的 LOL 梯队日报"
@@ -507,7 +549,7 @@ class LolHelperPlugin(Star):
         lines = ["本会话订阅："]
         for s in subs:
             t = s.get("target") or {}
-            detail = account_label(t["account"]) if t.get("account") else (t.get("league") or "").upper()
+            detail = account_label(t["account"]) if t.get("account") else " / ".join(league_label(x) for x in sub_league_list(s))
             lines.append(f"[{s['id']}] {SUB_TYPES.get(s['type'], s['type'])} {detail}".rstrip())
         lines.append("退订：/lol 退订 ID 或 /lol 退订 all")
         yield self._plain(event, "\n".join(lines))
@@ -612,11 +654,11 @@ class LolHelperPlugin(Star):
 
         Args:
             mode(string): schedule 表示赛程，result 表示赛果
-            league(string): 联赛，例如 lpl、lck、worlds、msi，留空表示全部
+            league(string): 联赛，可用空格分隔多个，例如 "worlds lpl"，留空表示全部
         """
-        lg = resolve_league(league) if league else None
+        lg, _ = parse_leagues(league.replace(",", " ").split()) if league else (None, [])
         try:
-            return self.f.text(await self.f.esports("result" if mode == "result" else "schedule", lg))
+            return self.f.text(await self.f.esports("result" if mode == "result" else "schedule", lg or None))
         except LolHelperError as exc:
             return f"查询失败：{exc}"
 

@@ -179,8 +179,8 @@
   .bar .o { background: #e8743b; } .bar .b { background: #4a90e2; }
   .trow-items { display: flex; gap: 2px; }
   .trow-items img, .trow-items i { width: 20px; height: 20px; }
-  .trow .nm small { overflow: hidden; }
-  .tagp.mini { font-size: 10px; line-height: 14px; padding: 0 5px; margin-left: 4px; vertical-align: 1px; }
+  .trow .nm small { overflow: visible; white-space: normal; line-height: 18px; }
+  .tagp.mini { display: inline-block; font-size: 10px; line-height: 14px; padding: 0 5px; margin: 2px 0 0 4px; vertical-align: 1px; }
   .tm-head .bans i.noban { width: 20px; height: 20px; border-radius: 4px; display: inline-block; background: rgba(255,255,255,.06); border: 1px dashed rgba(255,255,255,.18); }
 
   /* ---------- rune page ---------- */
@@ -249,7 +249,36 @@
   .vs-s.todo { color: {{ c.muted }}; font-size: 18px; }
   .vs-sub { margin-top: 4px; font-size: 12px; color: {{ c.muted }}; }
   .vs-sub .live { color: #ff5d5d; font-weight: 700; }
-</style>
+  .vs-no { display: inline-block; margin-right: 8px; padding: 0 7px; border-radius: 6px; background: {{ c.card }}; border: 1px solid {{ c.line }}; color: {{ c.text }}; font-weight: 700; }
+  .ob { display: inline-flex; align-items: center; gap: 3px; margin-right: 8px; white-space: nowrap; }
+  .ob img { width: 16px; height: 16px; object-fit: contain; }
+  .ob b { color: {{ c.text }}; font-weight: 700; }
+  .tm-head .obj b { font-size: 13px; }
+  .tm-head img.tm-logo { width: 26px; height: 26px; object-fit: contain; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)); }
+  .sg { padding: 10px 14px 9px; margin-bottom: 8px; border-radius: 12px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; }
+  .sg-row { display: grid; grid-template-columns: 1fr 108px 1fr; align-items: center; gap: 8px; }
+  .sg-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .sg-side.h { justify-content: flex-end; }
+  .sg-k { font-size: 30px; font-weight: 800; min-width: 40px; text-align: center; color: {{ c.muted }}; }
+  .sg-side.win .sg-k { color: #3fd18a; }
+  .sg-ch { display: flex; gap: 4px; }
+  .sg-c { width: 50px; text-align: center; position: relative; }
+  .sg-c img { width: 42px; height: 42px; border-radius: 8px; border: 2px solid transparent; display: block; margin: 0 auto; }
+  .sg-side.lose .sg-c img { filter: grayscale(.55) brightness(.8); }
+  .sg-c.mvp img { border-color: #e0b252; }
+  .sg-c small { display: block; font-size: 10.5px; color: {{ c.muted }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .sg-c.mvp small { color: #e0b252; font-weight: 700; }
+  .sg-m { text-align: center; }
+  .sg-m b { display: block; font-size: 15px; }
+  .sg-m span { font-size: 12px; color: {{ c.muted }}; }
+  .sg-m .live { color: #ff5d5d; font-weight: 700; }
+  .sg-foot { display: grid; grid-template-columns: 1fr 180px 1fr; gap: 8px; margin-top: 6px; font-size: 12px; color: {{ c.muted }}; align-items: center; }
+  .sg-foot .h { text-align: right; } .sg-foot .a { text-align: left; }
+  .sg-tag { display: inline-block; padding: 0 6px; border-radius: 5px; font-size: 11px; margin: 0 6px; }
+  .sg-tag.blue { background: rgba(66,135,245,.2); color: #7fb0ff; } .sg-tag.red { background: rgba(232,64,87,.2); color: #ff7d8e; }
+  .sg-mvp { text-align: center; white-space: nowrap; }
+  .sg-mvp img { width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; margin-right: 4px; }
+  .sg-mvp b { color: #e0b252; margin-right: 4px; }</style>
 </head>
 <body>
 {% macro strip(imgs) %}<div class="strip">{% for u in imgs %}{% if u is mapping %}<img src="{{ u.src|e }}" class="{{ u.cls|e }}">{% else %}<img src="{{ u|e }}">{% endif %}{% endfor %}</div>{% endmacro %}
@@ -313,8 +342,8 @@
     {% elif s.kind == "team" %}
       {% set t = s.team %}
       <div class="tm {{ t.cls|e }}">
-        <div class="tm-head"><b>{{ t.title|e }}</b><span>{{ t.kda|e }}</span><span>{{ t.gold|e }} 金</span>
-          <span class="obj">{% for o in t.obj %}{{ o[0]|e }} {{ o[1] }}{% if not loop.last %} · {% endif %}{% endfor %}</span>
+        <div class="tm-head">{% if t.logo %}<img class="tm-logo" src="{{ t.logo|e }}">{% endif %}<b>{{ t.title|e }}</b><span>{{ t.kda|e }}</span><span class="ob">{% if t.gold_icon %}<img src="{{ t.gold_icon|e }}">{% endif %}{{ t.gold|e }}{% if not t.gold_icon %} 金{% endif %}</span>
+          <span class="obj">{% for o in t.obj_i %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }} {% endif %}<b>{{ o.n }}</b></span>{% endfor %}</span>
           {% if t.bans %}<span class="bans">禁用 {% for u in t.bans %}{% if u %}<img src="{{ u|e }}">{% else %}<i class="noban"></i>{% endif %}{% endfor %}</span>{% endif %}</div>
         {% for r in t.rows %}
         <div class="trow {{ 'me' if r.me else '' }}">
@@ -362,13 +391,28 @@
     {% elif s.kind == "versus" %}
       {% for v in s.block.rows %}
       <div class="vs">
-        <div class="vs-top">{{ v.time|e }}<b>{{ v.league|e }}</b>{{ v.stage|e }}</div>
+        <div class="vs-top">{% if v.no %}<span class="vs-no">#{{ v.no }}</span>{% endif %}{{ v.time|e }}<b>{{ v.league|e }}</b>{{ v.stage|e }}</div>
         <div class="vs-t h{% if v.home.win %} win{% elif v.home.lose %} lose{% endif %}"><span class="vs-n">{{ v.home.name|e }}</span><span class="vs-logo">{% if v.home.logo %}<img src="{{ v.home.logo|e }}">{% endif %}</span></div>
         <div class="vs-m"><span class="vs-s {{ v.score_cls|e }}">{{ v.score|e }}</span><div class="vs-sub">{{ v.bo|e }}{% if v.bo %} · {% endif %}<span class="{{ v.score_cls|e }}">{{ v.state|e }}</span></div></div>
         <div class="vs-t a{% if v.away.win %} win{% elif v.away.lose %} lose{% endif %}"><span class="vs-logo">{% if v.away.logo %}<img src="{{ v.away.logo|e }}">{% endif %}</span><span class="vs-n">{{ v.away.name|e }}</span></div>
       </div>
       {% endfor %}
-    {% elif s.kind == "text" %}
+    {% elif s.kind == "series" %}
+      {% for r in s.block.rows %}
+      {% set H = r.home %}{% set A = r.away %}
+      <div class="sg">
+        <div class="sg-row">
+          <div class="sg-side h{% if H.win %} win{% elif H.lose %} lose{% endif %}"><div class="sg-ch">{% for ch in H.champs %}<div class="sg-c{% if ch.mvp %} mvp{% endif %}">{% if ch.icon %}<img src="{{ ch.icon|e }}">{% endif %}<small>{{ ch.name|e }}</small></div>{% endfor %}</div><div class="sg-k">{{ H.kills }}</div></div>
+          <div class="sg-m"><b>{{ r.no|e }}</b><span class="{{ 'live' if r.live else '' }}">{% if r.live %}进行中 · {% endif %}{{ r.dur|e }}</span></div>
+          <div class="sg-side a{% if A.win %} win{% elif A.lose %} lose{% endif %}"><div class="sg-k">{{ A.kills }}</div><div class="sg-ch">{% for ch in A.champs %}<div class="sg-c{% if ch.mvp %} mvp{% endif %}">{% if ch.icon %}<img src="{{ ch.icon|e }}">{% endif %}<small>{{ ch.name|e }}</small></div>{% endfor %}</div></div>
+        </div>
+        <div class="sg-foot">
+          <div class="h">{% for o in H.obj %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }}{% endif %}<b>{{ o.n }}</b></span>{% endfor %}<span class="ob"><img src="{{ H.gold_icon|e }}"><b>{{ H.gold|e }}</b></span><span class="sg-tag {{ 'blue' if H.side == '蓝方' else 'red' }}">{{ H.side|e }}</span></div>
+          <div class="sg-mvp">{% if r.mvp %}{% if r.mvp.icon %}<img src="{{ r.mvp.icon|e }}">{% endif %}<b>MVP</b>{{ r.mvp.name|e }} {{ r.mvp.kda|e }}{% endif %}</div>
+          <div class="a"><span class="sg-tag {{ 'blue' if A.side == '蓝方' else 'red' }}">{{ A.side|e }}</span>{% for o in A.obj %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }}{% endif %}<b>{{ o.n }}</b></span>{% endfor %}<span class="ob"><img src="{{ A.gold_icon|e }}"><b>{{ A.gold|e }}</b></span></div>
+        </div>
+      </div>
+      {% endfor %}    {% elif s.kind == "text" %}
       <div class="text">{{ s.text|e }}</div>
     {% endif %}
     {% if s.note %}<div class="note">{{ s.note|e }}</div>{% endif %}

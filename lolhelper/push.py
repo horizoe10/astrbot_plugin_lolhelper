@@ -12,7 +12,7 @@ from .doc import Doc
 from .errors import LolHelperError
 from .fmt import get_tz, local_time, parse_time
 from .service import OpggService, View, versus_row
-from .storage import account_key, account_label
+from .storage import account_key, account_label, sub_league_list
 
 SendFn = Callable[[str, View], Awaitable[None]]
 
@@ -139,9 +139,11 @@ class PushManager:
     async def check_esports(self) -> None:
         subs = self.f.store.subs(kind="esports")
         svc: OpggService = self.f.svc
+        wanted = [sub_league_list(s) for s in subs]
+        fetch = ([None] if any(not w for w in wanted) else []) + sorted({x for w in wanted for x in w})
         try:
-            upcoming = await svc.esports("schedule", None, limit=50)
-            results = await svc.esports("result", None, limit=50)
+            up_games, _ = await svc.esports_games("schedule", fetch)
+            res_games, _ = await svc.esports_games("result", fetch)
         except LolHelperError as exc:
             self.logger.info(f"[lolhelper] 获取赛程失败：{exc}")
             return
@@ -150,7 +152,7 @@ class PushManager:
         resulted = store.state("esports_resulted")
         now = time.time()
         if resulted is None:  # first run: do not flood with old results
-            store.set_state("esports_resulted", [g.get("id") for g in results.data["games"]][-200:])
+            store.set_state("esports_resulted", [g.get("id") for g in res_games][-200:])
             resulted = []
         resulted = set(resulted)
 
@@ -158,12 +160,12 @@ class PushManager:
             name = str(game.get("league") or "").lower()
             out = []
             for s in subs:
-                lg = (s.get("target") or {}).get("league")
-                if not lg or lg == name or lg in name or name in lg:
+                lgs = sub_league_list(s)
+                if not lgs or any(lg == name or lg in name or name in lg for lg in lgs):
                     out.append(s["umo"])
             return out
 
-        for g in upcoming.data["games"]:
+        for g in up_games:
             start = parse_time(g.get("scheduledAt"))
             if not start or g.get("id") in reminded:
                 continue
@@ -173,17 +175,39 @@ class PushManager:
                 if umos:
                     await self._broadcast(umos, self.esports_view(g, f"{int(delta // 60)} 分钟后开赛"))
                 reminded.add(g.get("id"))
-        for g in results.data["games"]:
+        pending = dict(store.state("esports_pending", {}) or {})
+        for g in res_games:
             if g.get("status") != "FINISHED" or g.get("id") in resulted:
                 continue
             start = parse_time(g.get("scheduledAt"))
             if start and now - start.timestamp() < 2 * 86400:
                 umos = targets(g)
                 if umos:
-                    await self._broadcast(umos, self.esports_view(g, "比赛结束"))
+                    view = await self.result_view(g)
+                    if view is None:  # per-game stats are not published yet; retry next round
+                        pending.setdefault(str(g.get("id")), now)
+                        if now - pending[str(g.get("id"))] < 40 * 60:
+                            continue
+                        view = self.esports_view(g, "比赛结束")
+                    await self._broadcast(umos, view)
             resulted.add(g.get("id"))
+            pending.pop(str(g.get("id")), None)
         store.set_state("esports_reminded", list(reminded)[-300:])
         store.set_state("esports_resulted", list(resulted)[-300:])
+        store.set_state("esports_pending", pending)
+
+    async def result_view(self, g: dict) -> View | None:
+        """Series card with per-game stats, or None while OP.GG has not published every game yet."""
+        try:
+            games, _ = await self.f.svc.esports_series_games(g)
+        except LolHelperError as exc:
+            self.logger.info(f"[lolhelper] 获取比赛数据失败：{exc}")
+            return None
+        played = int(g.get("homeScore") or 0) + int(g.get("awayScore") or 0)
+        if len(games) < played:
+            self.f.svc.cache.clear(f"esgames:{g.get('id')}:")
+            return None
+        return await self.f.svc.esports_match(g, headline="比赛结束", key=str(g.get("homeTeam", {}).get("acronym") or ""))
 
     def esports_view(self, g: dict, headline: str) -> View:
         home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}

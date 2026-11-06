@@ -22,7 +22,8 @@ from .render import render_markdown, render_text
 from .render.image import ImageRenderer
 from .service import OpggService, ServiceConfig, View
 from .settings import Settings
-from .storage import StateStore
+from .esports import EsportsClient
+from .storage import StateStore, sub_league_list
 from .tft import TftService
 from .fmt import set_default_tz
 
@@ -70,6 +71,7 @@ class Facade:
             self.logger,
         )
         self.tft = TftService(self.svc)
+        self.svc.esp = EsportsClient(self.http)
         self.bridge = CnBridgeClient(self.http, settings.cn_bridge_url, settings.cn_bridge_token, settings.cn_timeout)
         self.cn = CnService(self.bridge, self.svc, self.logger)
         self.store = StateStore(self.data_dir / "state.json")
@@ -168,8 +170,26 @@ class Facade:
             raise UsageError("位置可选：上单 / 打野 / 中单 / 下路 / 辅助")
         return await self.svc.tier(position, limit=max(self.s.text_max_rows, self.s.image_max_rows))
 
-    async def esports(self, mode: str = "schedule", league: str | None = None) -> View:
+    async def esports(self, mode: str = "schedule", league: str | list[str] | None = None) -> View:
         return await self.svc.esports(mode, league, limit=max(self.s.text_max_rows, 12))
+
+    def sub_leagues(self, umo: str | None) -> list[str] | None:
+        """Leagues this session subscribed to; None when not subscribed or subscribed to all."""
+        if not umo:
+            return None
+        leagues: list[str] = []
+        for s in self.store.subs(umo=umo, kind="esports"):
+            got = sub_league_list(s)
+            if not got:
+                return None
+            leagues += [x for x in got if x not in leagues]
+        return leagues or None
+
+    async def esports_match(self, leagues: list[str] | None = None, index: int | None = None, team: str | None = None,
+                            match_id: str | None = None, game_no: int | None = None) -> View:
+        g = await self.svc.esports_find(leagues, index, team, match_id)
+        key = str(index) if index else (team.upper() if team else (str(match_id) if match_id else ""))
+        return await self.svc.esports_match(g, game_no, key=key)
 
     async def standings(self, league: str) -> View:
         return await self.svc.standings(league)

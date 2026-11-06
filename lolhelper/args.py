@@ -45,6 +45,27 @@ class Args:
         return " ".join(self.words).strip()
 
 
+def parse_leagues(words: list[str]) -> tuple[list[str], list[str]]:
+    """Split words into known leagues (two-word names like "LTA South" supported) and leftovers."""
+    from .constants import resolve_league
+
+    leagues, rest, i = [], [], 0
+    while i < len(words):
+        two = resolve_league(" ".join(words[i:i + 2])) if i + 1 < len(words) else None
+        one = resolve_league(words[i])
+        if two:
+            hit, i = two, i + 2
+        elif one:
+            hit, i = one, i + 1
+        else:
+            rest.append(words[i])
+            i += 1
+            continue
+        if hit not in leagues:
+            leagues.append(hit)
+    return leagues, rest
+
+
 def strip_command(message: str, paths: list[list[str]]) -> str:
     """Remove the command words (e.g. ["lol", "战绩"]) from the start of a message."""
     msg = re.sub(r"\s+", " ", (message or "").strip())

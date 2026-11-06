@@ -301,6 +301,14 @@ class GameData:
             return f"{c['name_zh']} {c['title_zh']}"
         return c.get("name_zh") or c.get("key", "?")
 
+    def obj_icon(self, kind: str, red: bool = False) -> str | None:
+        """Match-history objective icon (tower / dragon / baron / herald / gold)."""
+        if kind == "gold":
+            return f"{self.cdragon}/latest/plugins/rcp-fe-lol-match-history/global/default/icon_gold.png"
+        if kind not in ("tower", "dragon", "baron", "herald", "inhibitor"):
+            return None
+        return f"{self.cdragon}/latest/plugins/rcp-fe-lol-match-history/global/default/{kind}-{200 if red else 100}.png"
+
     def champ_icon(self, c: dict | None) -> str | None:
         if not c or not self.version:
             return None

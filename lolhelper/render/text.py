@@ -31,7 +31,7 @@ def render_text(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> str:
             lines.extend(f"• {i}" for i in s.items)
             if s.total > len(s.items):
                 lines.append(f"…共 {s.total} 条")
-        elif s.kind in ("cards", "team", "runes", "skills", "iconrows", "versus"):
+        elif s.kind in ("cards", "team", "runes", "skills", "iconrows", "versus", "series"):
             lines.extend(s.items)
         elif s.kind == "tiles":
             lines.append(" / ".join(_cell(t) for t in s.tiles))

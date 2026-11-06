@@ -346,7 +346,7 @@ def team_panel(t: dict, game: dict, gd: GameData, max_dmg: int, max_taken: int) 
     tags = compute_tags(game)
     side = SIDE.get(t.get("key"), "")
     rows, lines = [], []
-    head = f"{'胜利' if t['win'] else '失败'} {side}".strip()
+    head = f"{'胜利' if t['win'] else '失败'} {t.get('label') or side}".strip()
     lines.append(f"{head} {tk}/{deaths}/{assists} · {big(t.get('gold'))} 金")
     for p in t["players"]:
         k, d, a = _int(p.get("kills")), _int(p.get("deaths")), _int(p.get("assists"))
@@ -374,6 +374,10 @@ def team_panel(t: dict, game: dict, gd: GameData, max_dmg: int, max_taken: int) 
             f"评分{row['score']}" if row["score"] else "", "·".join(x["text"] for x in row["tags"]),
         ] if x))
     obj = [(label, t.get(key)) for key, label in (("towers", "塔"), ("dragons", "龙"), ("barons", "男爵"), ("hordes", "巢虫")) if t.get(key) is not None]
+    red = t.get("key") == "RED"
+    obj_i = [{"icon": gd.obj_icon(kind, red), "label": label, "n": t.get(key)}
+             for key, label, kind in (("towers", "塔", "tower"), ("dragons", "龙", "dragon"), ("barons", "男爵", "baron"), ("hordes", "巢虫", ""))
+             if t.get(key) is not None]
     # OP.GG lists distinct bans only (skipped / duplicate bans are dropped), so pad to five slots.
     bans = [gd.champ_icon(gd.champion(b)) for b in (t.get("bans") or [])[:5]]
     bans += [None] * (5 - len(bans))
@@ -383,8 +387,8 @@ def team_panel(t: dict, game: dict, gd: GameData, max_dmg: int, max_taken: int) 
     if ban_names:
         lines[0] += " · 禁用 " + "、".join(ban_names)
     panel = {
-        "cls": "tm-win" if t["win"] else "tm-lose", "title": head, "kda": f"{tk}/{deaths}/{assists}",
-        "gold": big(t.get("gold")), "obj": obj, "bans": bans, "rows": rows,
+        "cls": "tm-win" if t["win"] else "tm-lose", "title": head, "logo": t.get("logo"), "kda": f"{tk}/{deaths}/{assists}",
+        "gold": big(t.get("gold")), "gold_icon": gd.obj_icon("gold"), "obj": obj, "obj_i": obj_i, "bans": bans, "rows": rows,
     }
     return panel, lines
 
