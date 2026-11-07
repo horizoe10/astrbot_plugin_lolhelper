@@ -561,11 +561,29 @@ class LolHelperPlugin(Star):
             yield self._plain(event, "用法：/lol 订阅 战绩 [账号序号] | 赛事 [联赛] | 梯队 | 云顶")
             return
         yield self._plain(event, f"{'✅ 已订阅' if new else 'ℹ️ 已经订阅过'}：{desc}（ID {sub['id']}）")
+        # show the subscribed content right away instead of waiting for the next trigger
+        s = self.settings
         if sub["type"] == "esports":
-            s = self.settings
             yield self._plain(event, f"推送：每天 {s.push_daily_hour}:00 赛程预告 · 开赛前 {int(s.push_esports_remind // 60)} 分钟提醒 · 每局结束推送比分 · 整场结束推送赛果。近期赛程如下：")
             target_leagues = sub_league_list(sub) or None
             yield await self._answer(event, lambda: self.f.esports("schedule", target_leagues), None)
+            for view in await self.push.live_views(target_leagues):
+                yield await self._reply(event, view)
+        elif sub["type"] == "match":
+            yield self._plain(event, f"推送：每 {int(s.push_match_interval // 60)} 分钟检查一次，有新对局时发送对局卡片。最近一局：")
+
+            async def latest():
+                acc_ = (sub.get("target") or {}).get("account")
+                ms = await self.f.latest_matches(acc_, 1)
+                if not ms:
+                    raise UsageError("暂时没有查到最近的对局")
+                return await self.push.match_view(acc_, ms[0])
+
+            yield await self._answer(event, latest, None)
+        elif sub["type"] == "lol_daily":
+            yield await self._answer(event, lambda: self.f.tier(None), None)
+        elif sub["type"] == "tft_daily":
+            yield await self._answer(event, lambda: self.f.tft.meta(10), None)
 
     @lol.command("订阅列表", alias={"subs"})
     async def lol_subs(self, event: AstrMessageEvent):

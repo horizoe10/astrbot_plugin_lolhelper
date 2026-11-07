@@ -209,6 +209,29 @@ class PushManager:
         live = await self.check_live_games(up_games + res_games, resulted, targets, now)
         self._esports_hot = hot or live
 
+    async def live_views(self, leagues: list[str] | None) -> list[View]:
+        """Cards of matches in progress for these leagues, shown right after subscribing.
+        Marks their finished games as pushed so the background check does not repeat them."""
+        svc = self.f.svc
+        store = self.f.store
+        pushed = dict(store.state("esports_game_pushed", {}) or {})
+        views = []
+        for g in (await svc.esports_games("schedule", leagues))[0]:
+            if str(g.get("status") or "").upper() != "RUNNING":
+                continue
+            try:
+                played, _ = await svc.esports_series_games(g)
+            except LolHelperError:
+                played = []
+            last = max((int(x.get("set") or 0) for x in played if x.get("finished")), default=0)
+            pushed[str(g.get("id"))] = max(last, int(pushed.get(str(g.get("id")), 0)))
+            h = (g.get("homeTeam") or {}).get("acronym") or "?"
+            a = (g.get("awayTeam") or {}).get("acronym") or "?"
+            head = f"进行中 · {h} {g.get('homeScore') or 0}:{g.get('awayScore') or 0} {a}"
+            views.append(await svc.esports_match(g, headline=head, key=h))
+        store.set_state("esports_game_pushed", pushed)
+        return views
+
     async def check_live_games(self, games: list[dict], resulted: set, targets, now: float) -> bool:
         """Push a card after each finished game of a series in progress. Returns True when a match is live."""
         from .esports import match_to_schedule
