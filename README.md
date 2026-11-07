@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/logo.png" width="140" alt="联盟助手">
+<img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/assets/logo-v13.png" width="140" alt="联盟助手">
 
 # 联盟助手
 
 **AstrBot 英雄联盟 / 云顶之弈数据插件**
 
-![version](https://img.shields.io/badge/version-1.2-C8AA6E)
+![version](https://img.shields.io/badge/version-1.3-C8AA6E)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10-0AC8B9)
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
@@ -21,11 +21,11 @@
 
 | 📜 战绩列表 | ⚔️ 单局详情 |
 |:---:|:---:|
-| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/matches-v3.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/game-v3.jpg" width="380"> |
+| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/matches-v4.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/game-v4.jpg" width="380"> |
 | **📈 版本梯队** | **♟️ 云顶阵容** |
-| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tier-v3.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tft-deck-v3.jpg" width="380"> |
+| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tier-v4.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/tft-deck-v4.jpg" width="380"> |
 | **🎬 赛况（每局数据）** | **🏆 赛程（多赛事）** |
-| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-match.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-schedule.jpg" width="380"> |
+| <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-match-v4.jpg" width="380"> | <img src="https://gcore.jsdelivr.net/gh/horizoe10/astrbot_plugin_lolhelper@main/docs/preview/esports-schedule-v4.jpg" width="380"> |
 
 ## ✨ 功能
 

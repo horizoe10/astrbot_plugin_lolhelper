@@ -97,7 +97,7 @@
       "image_theme": {
         "description": "图片主题",
         "type": "string",
-        "default": "dark",
+        "default": "fog",
         "options": [
           "dark",
           "graphite",
@@ -109,7 +109,7 @@
         "labels": [
           "炭黑",
           "石墨灰",
-          "雾灰",
+          "雾灰（推荐）",
           "银灰",
           "暖灰",
           "浅色"

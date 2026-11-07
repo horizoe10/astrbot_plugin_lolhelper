@@ -59,7 +59,7 @@ class Settings:
     text_max_rows: int = 10
     image_max_rows: int = 15
     image_renderer: str = "auto"
-    image_theme: str = "dark"
+    image_theme: str = "fog"
     image_quality: int = 85
     image_fallback_markdown: bool = True
     image_inline_icons: bool = True
