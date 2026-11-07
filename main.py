@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 import re
+import time
 
 import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
@@ -26,6 +29,8 @@ from .lolhelper.service import View
 from .lolhelper.settings import Settings
 from .lolhelper.service import league_label
 from .lolhelper.storage import account_label, sub_league_list
+from .lolhelper.wegame import parse_cookie
+from .lolhelper.wegame_login import DONE, EXPIRED, FAILED, SCANNED, WeChatQrLogin, WeGameQrLogin
 
 # first words that start a plugin command (group names and aliases)
 ENTRY_WORDS = {"lol", "tft", "云顶"}
@@ -59,6 +64,7 @@ HELP = """联盟助手 v{version}
 /lol 订阅 战绩|赛事 [联赛…]|梯队|云顶
 /lol 订阅列表 | 退订 <ID|all>
 /lol 大区 | 国服状态
+/lol WeGame登录 [QQ|微信]        管理员扫码登录 WeGame，自动保存国服凭证
 
 任意查询可加 -t / -m / -i 指定本次输出为文本 / Markdown / 图片"""
 
@@ -77,6 +83,7 @@ class LolHelperPlugin(Star):
         data_dir = StarTools.get_data_dir(PLUGIN_NAME)
         self.f = Facade(self.settings, data_dir, html_render=self.html_render, logger=logger)
         self.push = PushManager(self.f, self._push_send, logger)
+        self._wg_login_busy = False
 
     async def initialize(self) -> None:
         await self.f.start()
@@ -513,6 +520,101 @@ class LolHelperPlugin(Star):
         """检查国服客户端连接"""
         a = parse_args(self._rest(event, {"国服状态", "cn", "代理状态"}))
         yield await self._answer(event, self.f.cn_status, a.mode or "text")
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @lol.command("WeGame登录", alias={"wegame登录", "扫码登录", "wglogin"})
+    async def lol_wegame_login(self, event: AstrMessageEvent):
+        """扫码登录 WeGame 并自动保存国服凭证（管理员）：/lol WeGame登录 [QQ|微信]"""
+        rest = self._rest(event, {"WeGame登录", "wegame登录", "扫码登录", "wglogin"}).strip().lower()
+        wechat = rest in ("微信", "wx", "wechat", "weixin", "vx")
+        app, cls = ("微信", WeChatQrLogin) if wechat else ("QQ", WeGameQrLogin)
+        if not self.settings.cn_enabled:
+            yield self._plain(event, "国服战绩查询未开启，可在插件配置「国服 → 启用国服战绩查询」中开启（开启前请阅读风险提示）")
+            return
+        if self._wg_login_busy:
+            yield self._plain(event, "已有一个 WeGame 扫码登录正在进行，请先完成或等它过期")
+            return
+        self._wg_login_busy = True
+        path = ""
+        try:
+            async with cls(timeout=self.settings.cn_timeout, logger=logger) as qr:
+                try:
+                    png = await qr.start()
+                except LolHelperError as exc:
+                    yield self._plain(event, f"⚠️ {exc}")
+                    return
+                path = self._qr_file(png)
+                tip = f"📱 请用手机{app}扫码登录 WeGame，2 分钟内有效。登录后凭证会自动保存到插件配置。"
+                if not wechat:
+                    tip += "\n想用微信扫码请发送 /lol WeGame登录 微信"
+                if not event.is_private_chat():
+                    tip += "\n⚠️ 谁扫码就保存谁的账号凭证，建议私聊机器人使用，请勿让他人扫码。"
+                yield event.chain_result([Comp.Plain(tip), Comp.Image.fromFileSystem(path)])
+                deadline, told = time.time() + 120, False
+                while time.time() < deadline:
+                    await asyncio.sleep(2)
+                    state, msg = await qr.poll()
+                    if state == SCANNED and not told:
+                        told = True
+                        yield self._plain(event, f"✅ 已扫码，请在手机{app}上确认登录")
+                    elif state in (EXPIRED, FAILED):
+                        yield self._plain(event, f"⚠️ 登录未完成：{msg}。可重新发送 /lol WeGame登录{' 微信' if wechat else ''}")
+                        return
+                    elif state == DONE:
+                        break
+                else:
+                    yield self._plain(event, f"⌛ 二维码已过期，可重新发送 /lol WeGame登录{' 微信' if wechat else ''}")
+                    return
+                try:
+                    cookie = await qr.finish()
+                except LolHelperError as exc:
+                    yield self._plain(event, f"⚠️ {exc}")
+                    return
+                self._save_wegame_cookie(cookie)
+                who = f"（{qr.nick}）" if qr.nick else ""
+                yield self._plain(event, f"🎉 WeGame {app}登录成功{who}，凭证已保存到插件配置，国服查询现在可以使用 WeGame 数据源。")
+        except Exception:
+            logger.exception("[lolhelper] WeGame 扫码登录出错")
+            yield self._plain(event, "⚠️ WeGame 扫码登录出错，请稍后重试")
+        finally:
+            self._wg_login_busy = False
+            if path:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+    def _qr_file(self, png: bytes) -> str:
+        """Save the QR code enlarged with a white margin so phones scan it easily."""
+        out = self.f.data_dir / "render" / f"wegame_qr_{int(time.time())}.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            import io
+
+            from PIL import Image
+
+            img = Image.open(io.BytesIO(png)).convert("RGB")
+            if img.width < 300:  # QQ codes are tiny; WeChat ones are already large
+                img = img.resize((img.width * 3, img.height * 3), Image.NEAREST)
+            canvas = Image.new("RGB", (img.width + 60, img.height + 60), "white")
+            canvas.paste(img, (30, 30))
+            canvas.save(out)
+        except Exception:
+            out.write_bytes(png)
+        return str(out)
+
+    def _save_wegame_cookie(self, cookie: str) -> None:
+        cn = self.config.get("cn")
+        if not isinstance(cn, dict):
+            cn = {}
+            self.config["cn"] = cn
+        cn["wegame_cookie"] = cookie
+        save = getattr(self.config, "save_config", None)
+        if callable(save):
+            save()
+        self.settings.cn_wegame_cookie = cookie
+        self.f.wegame.cookie = parse_cookie(cookie)
+        self.f.wegame.expired = False
 
     def _can_subscribe(self, event: AstrMessageEvent) -> bool:
         if not self.settings.push_group_admin_only or event.is_private_chat():

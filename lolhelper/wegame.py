@@ -85,7 +85,7 @@ class WeGameClient:
         code = ((data or {}).get("result") or {}).get("error_code")
         if code in (ERR_EXPIRED, ERR_NO_LOGIN):
             self.expired = True
-            raise BridgeError("WeGame 凭证已过期，请重新登录 wegame.com.cn 并更新插件配置「国服 → WeGame 凭证」")
+            raise BridgeError("WeGame 凭证已过期，管理员可发送 /lol WeGame登录 扫码更新，或手动更新插件配置「国服 → WeGame 凭证」")
         if code == ERR_PRIVATE:
             raise NotFoundError("该玩家在 WeGame 设置了战绩不公开")
         if code not in (0, None):

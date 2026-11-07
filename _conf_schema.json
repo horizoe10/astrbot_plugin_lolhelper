@@ -298,7 +298,7 @@
         "type": "string",
         "default": "",
         "secret": true,
-        "hint": "客户端连不上时改用 WeGame 查国服。浏览器登录 wegame.com.cn 后，在开发者工具 → Application → Cookies 复制 tgp_id 和 tgp_ticket，按 tgp_id=…; tgp_ticket=… 填写（也可粘贴整串 Cookie）。凭证会过期，过期后重新复制；建议用小号"
+        "hint": "推荐管理员发送 /lol WeGame登录（QQ）或 /lol WeGame登录 微信，用手机扫码后自动填写。也可手动填写：浏览器登录 wegame.com.cn 后，在开发者工具 → Application → Cookies 复制 tgp_id 和 tgp_ticket，按 tgp_id=…; tgp_ticket=… 填写（也可粘贴整串 Cookie）。凭证会过期，过期后重新扫码或复制；建议用小号"
       },
       "bridge_token": {
         "description": "远程国服代理 Token（旧版）",

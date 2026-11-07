@@ -6,7 +6,7 @@
 
 **AstrBot 英雄联盟 / 云顶之弈数据插件**
 
-![version](https://img.shields.io/badge/version-1.3.2-C8AA6E)
+![version](https://img.shields.io/badge/version-1.4.0-C8AA6E)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10-0AC8B9)
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
@@ -56,7 +56,7 @@
 | ♟️ 云顶 | `/tft 阵容 [序号]` · `英雄` · `装备` · `强化` | `/tft 装备 大天使` |
 | 🔗 绑定 | `/lol 绑定` · `绑定国服` · `账号` · `切换` · `解绑` | `/lol 绑定国服 名字#12345 艾欧尼亚` |
 | 🔔 订阅 | `/lol 订阅 战绩 \| 赛事 [联赛…] \| 梯队 \| 云顶` | `/lol 订阅 赛事 S赛 LPL` |
-| ⚙️ 设置 | `/lol 模式` · `大区` · `国服状态` · `状态` · `帮助` | `/lol 模式 图片` |
+| ⚙️ 设置 | `/lol 模式` · `大区` · `国服状态` · `WeGame登录` · `状态` · `帮助` | `/lol 模式 图片` |
 
 英雄支持中文名、称号、外号和英文名（亚索 / 疾风剑豪 / 快乐风男 / Yasuo）；赛事支持简称和中文（S赛 / 全球总决赛 / Worlds、季中赛 / MSI）。
 
@@ -126,7 +126,7 @@ flowchart LR
   B[🤖 联盟助手] --> Q{同一台电脑<br/>有国服客户端?}
   Q -->|是 · 内置| L[🎮 国服客户端 LCU]
   Q -->|否 · 远程代理| P[🧩 游戏电脑上的<br/>start_bridge.bat]
-  Q -.->|都连不上| W[🟦 WeGame 凭证]
+  Q -.->|都连不上| W[🟦 WeGame 凭证<br/>📱 /lol WeGame登录 QQ / 微信扫码]
   P --> L
   L -- 令牌 --> S[🛰️ SGP 战绩服务]
 ```
@@ -135,12 +135,12 @@ flowchart LR
 |---|---|
 | 🖥️ AstrBot 和国服客户端在同一台 Windows 电脑 | 什么都不用配，登录客户端即可 |
 | ☁️ AstrBot 在服务器 / Docker / NAS | 游戏电脑双击 `bridge/start_bridge.bat`，把窗口显示的地址（含 `?token=`）填到「国服 → 远程国服代理」。仅限局域网使用，不要暴露到公网 |
-| 🟦 没有常开的游戏电脑 | 浏览器登录 [wegame.com.cn](https://www.wegame.com.cn)，从 Cookie 复制 `tgp_id`、`tgp_ticket` 填到「国服 → WeGame 凭证」 |
+| 🟦 没有常开的游戏电脑 | 管理员发送 `/lol WeGame登录`（QQ）或 `/lol WeGame登录 微信`，用手机扫码，凭证自动保存；也可从 [wegame.com.cn](https://www.wegame.com.cn) 的 Cookie 复制 `tgp_id`、`tgp_ticket` 手动填写 |
 
 | 数据源 | 战绩 / 单局 | 段位 | 维护 |
 |---|:---:|:---:|---|
 | 🎮 客户端 | ✅ | ✅ 当前大区 | 客户端需保持登录 |
-| 🟦 WeGame | ✅ | ✅ 单双 / 灵活 | 凭证会过期，过期后 `/lol 国服状态` 会提示重新复制；玩家关闭战绩公开时查不到 |
+| 🟦 WeGame | ✅ | ✅ 单双 / 灵活 | 凭证会过期，过期后重新发送 `/lol WeGame登录` 扫码即可（QQ / 微信均可）；玩家关闭战绩公开时查不到 |
 
 然后 `/lol 国服状态` 检查连接，`/lol 绑定国服 名字#编号 艾欧尼亚` 绑定账号。
 
@@ -187,6 +187,7 @@ lolhelper/            核心包（不依赖 AstrBot）
   esports.py                赛事每局数据（esports.op.gg）
   cn.py                     国服代理客户端
   wegame.py                 国服 WeGame 数据源
+  wegame_login.py           WeGame 扫码登录（QQ / 微信）
   render/ doc.py            文本 / Markdown / HTML / 图片渲染
   facade.py push.py
 templates/card.html   图片模板

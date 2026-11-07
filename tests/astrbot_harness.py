@@ -241,7 +241,7 @@ async def main() -> int:
         ("tft 强化 贷款 -t", "tft_augment", "贷款"),
         ("tft 阵容 -i", "tft_meta", "<image"),
         ("lol 大区", "lol_regions", "艾欧尼亚"),
-        ("lol 状态", "lol_status", "联盟助手 v1.3.2"),
+        ("lol 状态", "lol_status", "联盟助手 v1.4.0"),
         ("lol 帮助", "lol_help", "/lol 英雄"),
     ]
     for text, want_handler, want in cases:
@@ -273,6 +273,24 @@ async def main() -> int:
 
     # remote CN bridge address with the token in the URL
     check(plugin.f.bridge.mode == "remote" and plugin.f.bridge.token == "tk", "remote cn address carries token")
+
+    # WeGame QR login: routes to the handler and first replies with a QR image (stop before scanning)
+    md = find_handler(handlers, "lol WeGame登录")
+    check(md is not None and md.handler_name == "lol_wegame_login", "wegame login command routed")
+    gen = md.handler(plugin, make_event("lol WeGame登录"))
+    first = await gen.__anext__()
+    await gen.aclose()
+    kinds = [type(c).__name__ for c in (first.chain or [])]
+    check("Image" in kinds and "扫码" in describe(first), f"wegame login sends QR image {kinds}")
+    check(plugin._wg_login_busy is False, "wegame login releases its lock")
+    gen = md.handler(plugin, make_event("lol WeGame登录 微信"))
+    first = await gen.__anext__()
+    await gen.aclose()
+    kinds = [type(c).__name__ for c in (first.chain or [])]
+    check("Image" in kinds and "微信扫码" in describe(first), f"wegame wechat login sends QR image {kinds}")
+    plugin._save_wegame_cookie("a=1; tgp_id=123; tgp_ticket=ABC")
+    check(plugin.config["cn"]["wegame_cookie"].startswith("a=1") and plugin.f.wegame.cookie == "tgp_id=123; tgp_ticket=ABC",
+          "wegame cookie saved to config and client")
 
     # compat entry: empty wake prefix (QQ official bots) -> slash commands / bare commands without @
     async def compat(text, woken):
