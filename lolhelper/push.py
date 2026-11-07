@@ -55,7 +55,7 @@ class PushManager:
                 raise
             except Exception:
                 self.logger.exception("[lolhelper] 推送任务出错")
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
 
     def _due(self, name: str, interval: float) -> bool:
         now = time.time()
@@ -72,7 +72,8 @@ class PushManager:
         if store.subs(kind="match") and self._due("match", s.push_match_interval):
             await self.check_matches()
         # check every 2 minutes while a subscribed match is live or about to start
-        esports_every = 120 if getattr(self, "_esports_hot", False) else s.push_esports_interval
+        # every minute while a subscribed match is live or about to start
+        esports_every = 60 if getattr(self, "_esports_hot", False) else s.push_esports_interval
         if store.subs(kind="esports") and self._due("esports", esports_every):
             await self.check_esports()
         if store.subs(kind="lol_daily") or store.subs(kind="tft_daily") or store.subs(kind="esports"):
@@ -148,6 +149,8 @@ class PushManager:
         svc: OpggService = self.f.svc
         wanted = [sub_league_list(s) for s in subs]
         fetch = ([None] if any(not w for w in wanted) else []) + sorted({x for w in wanted for x in w})
+        if getattr(self, "_esports_hot", False):
+            svc.cache.clear("esports:result")  # live: read fresh results instead of the 5-minute cache
         try:
             up_games, _ = await svc.esports_games("schedule", fetch)
             res_games, _ = await svc.esports_games("result", fetch)

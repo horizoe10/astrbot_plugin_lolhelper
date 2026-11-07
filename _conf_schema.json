@@ -100,10 +100,18 @@
         "default": "dark",
         "options": [
           "dark",
+          "graphite",
+          "fog",
+          "silver",
+          "warm",
           "light"
         ],
         "labels": [
-          "深色",
+          "炭黑",
+          "石墨灰",
+          "雾灰",
+          "银灰",
+          "暖灰",
           "浅色"
         ]
       },
@@ -370,8 +378,9 @@
       "esports_interval_min": {
         "description": "赛程检查间隔（分钟）",
         "type": "int",
-        "default": 10,
-        "invisible": true
+        "default": 5,
+        "invisible": true,
+        "hint": "平时的检查间隔；比赛进行中或即将开赛时自动改为每分钟检查"
       }
     }
   },

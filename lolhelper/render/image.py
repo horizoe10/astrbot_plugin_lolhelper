@@ -160,10 +160,15 @@ class ImageRenderer:
     async def _t2i(self, doc: Doc, umo: str | None, want_file: bool) -> str:
         data = await self._data(doc, T2I_VIEWPORT_WIDTH)
         options = {"full_page": True, "type": "jpeg", "quality": self.quality}
+        # ask for a local file so the empty area below short cards (the service page is >= 720px tall) can be cut off
         try:
-            return await self.html_render(load_template(), data, return_url=not want_file, options=options, umo=umo)
+            ref = await self.html_render(load_template(), data, return_url=False, options=options, umo=umo)
         except TypeError:  # AstrBot versions without the umo parameter
-            return await self.html_render(load_template(), data, return_url=not want_file, options=options)
+            ref = await self.html_render(load_template(), data, return_url=False, options=options)
+        if ref and not str(ref).startswith("http"):
+            trimmed = await asyncio.to_thread(trim_bottom, str(ref), self.out_dir, self.quality)
+            return trimmed or ref
+        return ref
 
     async def _playwright(self, doc: Doc) -> str:
         try:
@@ -211,3 +216,33 @@ async def _launch(p):
             errors.append(f"{channel or 'chromium'}: {str(exc).splitlines()[0]}")
     raise ImageRenderError("没有可用的浏览器（可运行 playwright install chromium）；" + " | ".join(errors))
 
+
+
+def trim_bottom(path: str, out_dir: Path, quality: int = 85, pad: int = 18) -> str | None:
+    """Cut the uniform background below the card's last line, keeping `pad` px. Returns the new file or None."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    try:
+        with Image.open(path) as im:
+            rgb = im.convert("RGB")
+        w, h = rgb.size
+        bg = rgb.getpixel((w - 2, h - 2))
+        px = rgb.load()
+        step = max(1, w // 200)
+
+        def blank(y: int) -> bool:
+            return all(sum(abs(a - b) for a, b in zip(px[x, y], bg)) <= 24 for x in range(0, w, step))
+
+        y = h - 1
+        while y > 0 and blank(y):
+            y -= 1
+        cut = min(h, y + 1 + pad)
+        if cut >= h - 4:
+            return None  # nothing worth trimming
+        out = Path(out_dir) / f"t2i_{hashlib.md5(path.encode()).hexdigest()[:12]}_{int(time.time())}.jpg"
+        rgb.crop((0, 0, w, cut)).save(out, "JPEG", quality=quality)
+        return str(out)
+    except Exception:
+        return None

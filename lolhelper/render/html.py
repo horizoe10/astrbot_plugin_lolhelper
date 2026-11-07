@@ -19,6 +19,23 @@ THEMES: dict[str, dict[str, str]] = {
         "bg": "#eef1f6", "card": "#ffffff", "card2": "#f5f7fb", "text": "#1f2633",
         "muted": "#6b7587", "line": "#e1e6ef",
     },
+    # grey-ish dark variants (candidates)
+    "graphite": {
+        "bg": "#1f2124", "card": "#1f2124", "card2": "#2a2d31", "text": "#eef0f2",
+        "muted": "#9ca1a9", "line": "#363a40",
+    },
+    "fog": {
+        "bg": "#2a2d32", "card": "#2a2d32", "card2": "#353940", "text": "#f2f3f5",
+        "muted": "#a9aeb6", "line": "#43474f",
+    },
+    "silver": {
+        "bg": "#34373d", "card": "#34373d", "card2": "#40444b", "text": "#f6f7f8",
+        "muted": "#b6bac1", "line": "#4d525a",
+    },
+    "warm": {
+        "bg": "#2b2a28", "card": "#2b2a28", "card2": "#363532", "text": "#f3f1ec",
+        "muted": "#b1aca3", "line": "#45433f",
+    },
 }
 
 ACCENTS = {"lol": "#5383e8", "tft": "#d9a441", "cn": "#d0353f", "esports": "#8b5cf6"}

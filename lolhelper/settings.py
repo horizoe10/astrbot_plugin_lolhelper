@@ -92,7 +92,7 @@ class Settings:
     # push
     push_enabled: bool = True
     push_match_interval: float = 300
-    push_esports_interval: float = 600
+    push_esports_interval: float = 300
     push_esports_remind: float = 1800
     push_daily_hour: int = 10
     push_max_new_matches: int = 3
@@ -175,7 +175,7 @@ class Settings:
 
         s.push_enabled = bool(g(push, "enabled", s.push_enabled))
         s.push_match_interval = max(60.0, float(g(push, "match_interval_min", 5)) * 60)
-        s.push_esports_interval = max(120.0, float(g(push, "esports_interval_min", 10)) * 60)
+        s.push_esports_interval = max(60.0, float(g(push, "esports_interval_min", 5)) * 60)
         s.push_esports_remind = float(g(push, "esports_remind_min", 30)) * 60
         s.push_daily_hour = int(g(push, "daily_hour", s.push_daily_hour)) % 24
         s.push_max_new_matches = int(g(push, "max_new_matches", s.push_max_new_matches))
