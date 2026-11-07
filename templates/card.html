@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: {{ c.card }}; }
   body {
-    background: {{ c.bg }};
+    background: {{ c.card }};
     font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
     color: {{ c.text }};
     width: {{ width }}px;
-    padding: 18px;
     font-size: 15px;
   }
-  .card { background: {{ c.card }}; border-radius: 16px; overflow: hidden; border: 1px solid {{ c.line }}; }
+  .card { background: {{ c.card }}; overflow: hidden; }
   .head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 3px solid {{ c.accent }};
           background: linear-gradient(120deg, {{ c.accent }}33, transparent 70%); }
   .head img { width: 64px; height: 64px; border-radius: 12px; border: 2px solid {{ c.accent }}; object-fit: cover; }

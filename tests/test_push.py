@@ -71,3 +71,55 @@ def test_push_new_matches_only_after_first_seen(tmp_path, gd):
 
     asyncio.run(run())
 
+
+
+
+def test_live_games_push_once_per_finished_game(tmp_path, gd):
+    from lolhelper.service import View
+
+    async def run():
+        store = StateStore(tmp_path / "s.json")
+        await store.load()
+        await store.add_sub("g1", "esports", {"league": "worlds"})
+        f = FakeFacade(gd, store)
+        state = {"score": (1, 0), "games": [{"set": 1, "finished": True}, {"set": 2, "finished": False}]}
+
+        class Esp:
+            async def match(self, gid):
+                h, a = state["score"]
+                return {"id": gid, "status": "running", "homeScore": h, "awayScore": a, "numberOfGames": 5,
+                        "homeTeam": {"acronym": "BLG"}, "awayTeam": {"acronym": "DK"},
+                        "tournament": {"serie": {"league": {"shortName": "Worlds"}}}}
+
+        async def series_games(g):
+            return state["games"], 0
+
+        async def esports_match(g, game_no=None, headline="", key=""):
+            return View("lol_esports_match", {}, Doc(title=headline))
+
+        f.svc.esp = Esp()
+        f.svc.esports_series_games = series_games
+        f.svc.esports_match = esports_match
+        sent = []
+
+        async def send(umo, view):
+            sent.append((umo, view.doc.title))
+
+        pm = PushManager(f, send)
+        import time as _t
+        from datetime import datetime, timezone
+        start = datetime.fromtimestamp(_t.time() - 3600, timezone.utc).isoformat()
+        games = [{"id": 1, "league": "Worlds", "scheduledAt": start, "status": "RUNNING"}]
+        targets = lambda g: ["g1"]
+        assert await pm.check_live_games(games, set(), targets, _t.time()) is True
+        assert sent == [("g1", "第1局结束 · BLG 1:0 DK")]
+        await pm.check_live_games(games, set(), targets, _t.time())
+        assert len(sent) == 1  # same game is not pushed twice
+        state.update(score=(1, 1), games=[{"set": 1, "finished": True}, {"set": 2, "finished": True}])
+        await pm.check_live_games(games, set(), targets, _t.time())
+        assert sent[-1] == ("g1", "第2局结束 · BLG 1:1 DK")
+        state.update(score=(3, 1), games=[{"set": i, "finished": True} for i in range(1, 5)])
+        await pm.check_live_games(games, set(), targets, _t.time())
+        assert len(sent) == 2  # series decided: left to the full result card
+
+    asyncio.run(run())

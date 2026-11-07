@@ -852,9 +852,15 @@ class OpggService:
         games.sort(key=lambda g: g.get("scheduledAt") or "", reverse=mode == "result")
         return games, min(c for _, c in parts)
 
-    async def esports(self, mode: str = "schedule", league: str | list[str] | None = None, limit: int = 10) -> View:
+    async def esports(self, mode: str = "schedule", league: str | list[str] | None = None, limit: int = 10,
+                      within_hours: float = 0) -> View:
         leagues = [league] if isinstance(league, str) else list(league or [])
         games, created = await self.esports_games(mode, leagues)
+        if within_hours:
+            from .fmt import parse_time
+
+            end = time.time() + within_hours * 3600
+            games = [g for g in games if (t := parse_time(g.get("scheduledAt"))) is not None and time.time() - 3 * 3600 <= t.timestamp() <= end]
         kind = "赛果" if mode == "result" else "赛程"
         tz_note = "时间为北京时间" if self.cfg.timezone == "Asia/Shanghai" else self.cfg.timezone
         if len(leagues) == 1:

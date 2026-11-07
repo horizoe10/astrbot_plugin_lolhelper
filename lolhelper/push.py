@@ -71,9 +71,11 @@ class PushManager:
         store = self.f.store
         if store.subs(kind="match") and self._due("match", s.push_match_interval):
             await self.check_matches()
-        if store.subs(kind="esports") and self._due("esports", s.push_esports_interval):
+        # check every 2 minutes while a subscribed match is live or about to start
+        esports_every = 120 if getattr(self, "_esports_hot", False) else s.push_esports_interval
+        if store.subs(kind="esports") and self._due("esports", esports_every):
             await self.check_esports()
-        if store.subs(kind="lol_daily") or store.subs(kind="tft_daily"):
+        if store.subs(kind="lol_daily") or store.subs(kind="tft_daily") or store.subs(kind="esports"):
             await self.check_daily()
 
     async def _broadcast(self, umos: list[str], view: View) -> None:
@@ -156,6 +158,10 @@ class PushManager:
         reminded = set(store.state("esports_reminded", []))
         resulted = store.state("esports_resulted")
         now = time.time()
+        hot = any(
+            (st := parse_time(g.get("scheduledAt"))) is not None and 0 < st.timestamp() - now <= self.f.s.push_esports_remind + 900
+            for g in up_games
+        )
         if resulted is None:  # first run: do not flood with old results
             store.set_state("esports_resulted", [g.get("id") for g in res_games][-200:])
             resulted = []
@@ -200,6 +206,57 @@ class PushManager:
         store.set_state("esports_reminded", list(reminded)[-300:])
         store.set_state("esports_resulted", list(resulted)[-300:])
         store.set_state("esports_pending", pending)
+        live = await self.check_live_games(up_games + res_games, resulted, targets, now)
+        self._esports_hot = hot or live
+
+    async def check_live_games(self, games: list[dict], resulted: set, targets, now: float) -> bool:
+        """Push a card after each finished game of a series in progress. Returns True when a match is live."""
+        from .esports import match_to_schedule
+
+        svc = self.f.svc
+        if svc.esp is None:
+            return False
+        store = self.f.store
+        pushed = dict(store.state("esports_game_pushed", {}) or {})
+        live = False
+        seen = set()
+        for g in games:
+            gid = g.get("id")
+            start = parse_time(g.get("scheduledAt"))
+            if gid in seen or gid in resulted or not start or not (now - 8 * 3600 <= start.timestamp() <= now + 300):
+                continue
+            seen.add(gid)
+            if not targets(g):
+                continue
+            try:
+                m = await svc.esp.match(gid)
+            except LolHelperError as exc:
+                self.logger.info(f"[lolhelper] 获取比赛状态失败：{exc}")
+                continue
+            if not m or str(m.get("status") or "").lower() not in ("running", "started", "live", "in_progress"):
+                continue
+            live = True
+            cur = match_to_schedule(m)
+            cur["status"] = "RUNNING"
+            hs, as_ = int(cur.get("homeScore") or 0), int(cur.get("awayScore") or 0)
+            need = int(cur.get("numberOfGames") or 1) // 2 + 1
+            if max(hs, as_) >= need:
+                continue  # series decided: the full result card follows
+            try:
+                played, _ = await svc.esports_series_games(cur)
+            except LolHelperError:
+                continue
+            done = [x for x in played if x.get("finished")]
+            last = max((int(x.get("set") or 0) for x in done), default=0)
+            if last <= int(pushed.get(str(gid), 0)):
+                continue
+            pushed[str(gid)] = last
+            h = (cur.get("homeTeam") or {}).get("acronym") or "?"
+            a = (cur.get("awayTeam") or {}).get("acronym") or "?"
+            view = await svc.esports_match(cur, headline=f"第{last}局结束 · {h} {hs}:{as_} {a}", key=h)
+            await self._broadcast(targets(g), view)
+        store.set_state("esports_game_pushed", dict(list(pushed.items())[-100:]))
+        return live
 
     async def result_view(self, g: dict) -> View | None:
         """Series card with per-game stats, or None while OP.GG has not published every game yet."""
@@ -243,6 +300,7 @@ class PushManager:
         if now.hour != self.f.s.push_daily_hour:
             return
         today = now.strftime("%Y-%m-%d")
+        await self._daily_esports(today)
         for kind in ("lol_daily", "tft_daily"):
             subs = self.f.store.subs(kind=kind)
             if not subs or self.f.store.state(f"daily:{kind}") == today:
@@ -254,4 +312,24 @@ class PushManager:
                 continue
             self.f.store.set_state(f"daily:{kind}", today)
             await self._broadcast([s["umo"] for s in subs], view)
+
+    async def _daily_esports(self, today: str) -> None:
+        """Each subscribed chat gets the next 24 hours of its leagues' matches (nothing when there are none)."""
+        subs = self.f.store.subs(kind="esports")
+        if not subs or self.f.store.state("daily:esports") == today:
+            return
+        self.f.store.set_state("daily:esports", today)
+        groups: dict[tuple, list[str]] = {}
+        for s in subs:
+            groups.setdefault(tuple(sub_league_list(s)), []).append(s["umo"])
+        for leagues, umos in groups.items():
+            try:
+                view = await self.f.svc.esports("schedule", list(leagues) or None, limit=12, within_hours=24)
+            except LolHelperError as exc:
+                self.logger.info(f"[lolhelper] 赛程预告生成失败：{exc}")
+                continue
+            if not (view.data.get("games") or []):
+                continue
+            view.doc.badge("今日赛程预告 · 未来 24 小时", "accent")
+            await self._broadcast(umos, view)
 

@@ -561,6 +561,11 @@ class LolHelperPlugin(Star):
             yield self._plain(event, "用法：/lol 订阅 战绩 [账号序号] | 赛事 [联赛] | 梯队 | 云顶")
             return
         yield self._plain(event, f"{'✅ 已订阅' if new else 'ℹ️ 已经订阅过'}：{desc}（ID {sub['id']}）")
+        if sub["type"] == "esports":
+            s = self.settings
+            yield self._plain(event, f"推送：每天 {s.push_daily_hour}:00 赛程预告 · 开赛前 {int(s.push_esports_remind // 60)} 分钟提醒 · 每局结束推送比分 · 整场结束推送赛果。近期赛程如下：")
+            target_leagues = sub_league_list(sub) or None
+            yield await self._answer(event, lambda: self.f.esports("schedule", target_leagues), None)
 
     @lol.command("订阅列表", alias={"subs"})
     async def lol_subs(self, event: AstrMessageEvent):

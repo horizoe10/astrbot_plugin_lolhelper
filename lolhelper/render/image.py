@@ -182,7 +182,7 @@ class ImageRenderer:
             browser = await _launch(p)
             try:
                 page = await browser.new_page(
-                    viewport={"width": self.width + 36, "height": 400}, device_scale_factor=2
+                    viewport={"width": int(data["width"]), "height": 400}, device_scale_factor=2
                 )
                 await page.set_content(html, wait_until="networkidle", timeout=20000)
                 await page.screenshot(path=str(path), full_page=True, type="jpeg", quality=self.quality)
