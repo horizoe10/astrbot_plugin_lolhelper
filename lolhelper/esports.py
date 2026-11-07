@@ -21,6 +21,10 @@ MATCH_QUERY = """query LhMatch($id: ID!) { match(id: $id) {
   homeTeam { %s } awayTeam { %s } winnerTeam { id }
   tournament { name serie { league { shortName } } } } }""" % (_TEAM, _TEAM)
 
+LIVE_QUERY = """query LhLive($from: Date, $to: Date) { matches(from: $from, to: $to) {
+  id name scheduledAt beginAt numberOfGames homeScore awayScore status
+  homeTeam { %s } awayTeam { %s } tournament { name serie { league { shortName } } } } }""" % (_TEAM, _TEAM)
+
 GAME_QUERY = """query LhGame($matchId: ID!, $set: Int) { gameByMatch(matchId: $matchId, set: $set) {
   id beginAt length finished status winner { id acronym }
   teams { side bans kills towerKills inhibitorKills dragonKills elderDrakeKills baronKills heraldKills atakhanKills goldEarned team { %s } }
@@ -52,6 +56,16 @@ class EsportsClient:
 
     async def match(self, match_id: str | int) -> dict | None:
         return (await self._query(MATCH_QUERY, {"id": str(match_id)})).get("match")
+
+    async def live(self, hours_back: float = 12) -> list[dict]:
+        """Matches in progress. The MCP schedule lists only unstarted matches and the results only finished ones."""
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        fmt = "%Y-%m-%dT%H:%M:%S.000Z"
+        data = await self._query(LIVE_QUERY, {"from": (now - timedelta(hours=hours_back)).strftime(fmt),
+                                              "to": (now + timedelta(hours=1)).strftime(fmt)})
+        return [m for m in data.get("matches") or [] if str(m.get("status") or "").lower() in ("running", "started", "live", "in_progress")]
 
     async def game(self, match_id: str | int, set_no: int) -> dict | None:
         return (await self._query(GAME_QUERY, {"matchId": str(match_id), "set": int(set_no)})).get("gameByMatch")

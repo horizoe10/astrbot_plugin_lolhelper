@@ -116,6 +116,12 @@ def _lane_fields(positions: list[str]) -> list[str]:
 LIVE_STATUS = ("RUNNING", "IN_PROGRESS", "LIVE", "STARTED")
 
 
+def _league_match(name: str | None, key: str) -> bool:
+    """Whether an OP.GG league name ("Worlds", "LTA North") belongs to a league key ("worlds", "lta north")."""
+    n, k = str(name or "").lower(), str(key or "").lower()
+    return bool(n and k) and (n == k or league_info(name)["key"] == league_info(k)["key"])
+
+
 def league_label(key: str) -> str:
     info = league_info(key)
     return info["short"] if info["color"] else key.upper()
@@ -850,7 +856,31 @@ class OpggService:
                 seen.add(g.get("id"))
                 games.append(g)
         games.sort(key=lambda g: g.get("scheduledAt") or "", reverse=mode == "result")
+        if mode == "schedule":
+            live = [g for g in await self.esports_live() if str(g.get("id")) not in {str(x) for x in seen}
+                    and (not leagues or any(_league_match(g.get("league"), lg) for lg in leagues if lg))]
+            games = live + games  # matches in progress first
         return games, min(c for _, c in parts)
+
+    async def esports_live(self) -> list[dict]:
+        """Matches in progress (schedule-shaped), cached for a minute; [] when the esports API is unavailable."""
+        if self.esp is None:
+            return []
+        from .esports import match_to_schedule
+
+        try:
+            raw, _ = await self.cache.get_or_load("esports:live", 60, self.esp.live)
+        except Exception as exc:
+            self.logger.info(f"[lolhelper] 获取进行中的比赛失败：{exc}")
+            return []
+        out = []
+        for m in raw or []:
+            g = match_to_schedule(m)
+            g["status"] = "RUNNING"
+            if str(g.get("id") or "").isdigit():
+                g["id"] = int(g["id"])
+            out.append(g)
+        return out
 
     async def esports(self, mode: str = "schedule", league: str | list[str] | None = None, limit: int = 10,
                       within_hours: float = 0) -> View:
@@ -935,6 +965,7 @@ class OpggService:
     async def esports_match(self, g: dict, game_no: int | None = None, headline: str = "", key: str = "") -> View:
         from .esports import build_esports_game_view, build_series_view
 
+        await self.gd.ensure_lol()
         games, created = await self.esports_series_games(g)
         if game_no:
             game = next((x for x in games if x.get("set") == game_no), None)

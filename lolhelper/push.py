@@ -163,8 +163,8 @@ class PushManager:
             for g in up_games
         )
         if resulted is None:  # first run: do not flood with old results
-            store.set_state("esports_resulted", [g.get("id") for g in res_games][-200:])
-            resulted = []
+            resulted = [g.get("id") for g in res_games][-200:]
+            store.set_state("esports_resulted", resulted)
         resulted = set(resulted)
 
         def targets(game: dict) -> list[str]:
