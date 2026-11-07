@@ -26,7 +26,6 @@ import argparse
 import base64
 import hmac
 import json
-import logging
 import os
 import re
 import secrets
@@ -41,8 +40,45 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.1"
-log = logging.getLogger("lolhelper-cn-bridge")
+VERSION = "1.2"
+
+
+class ConsoleLog:
+    """Minimal console logger for standalone runs.
+
+    When the plugin loads this file in-process it replaces `log` with AstrBot's logger.
+    """
+
+    LEVELS = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40}
+
+    def __init__(self, level: str = "INFO"):
+        self.level = self.LEVELS.get(str(level).upper(), 20)
+
+    def _out(self, level: str, msg, *args) -> None:
+        if self.LEVELS[level] < self.level:
+            return
+        text = str(msg) % args if args else str(msg)
+        print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {level} {text}", file=sys.stderr, flush=True)
+
+    def debug(self, msg, *args, **kwargs) -> None:
+        self._out("DEBUG", msg, *args)
+
+    def info(self, msg, *args, **kwargs) -> None:
+        self._out("INFO", msg, *args)
+
+    def warning(self, msg, *args, **kwargs) -> None:
+        self._out("WARNING", msg, *args)
+
+    def error(self, msg, *args, **kwargs) -> None:
+        self._out("ERROR", msg, *args)
+
+    def exception(self, msg, *args, **kwargs) -> None:
+        self._out("ERROR", msg, *args)
+        import traceback
+        traceback.print_exc()
+
+
+log = ConsoleLog()
 
 # Same table as League Akari builtin.ts (BUILTIN_SGP_LEAGUE_SERVERS_CONFIG).
 SGP_SERVERS = {
@@ -535,8 +571,7 @@ def main(argv=None) -> int:
         cfg["host"] = args.host
     if args.port:
         cfg["port"] = args.port
-    logging.basicConfig(level=getattr(logging, str(cfg.get("log_level", "INFO")).upper(), logging.INFO),
-                        format="%(asctime)s %(levelname)s %(message)s")
+    log.level = ConsoleLog.LEVELS.get(str(cfg.get("log_level", "INFO")).upper(), 20)
     bridge = Bridge(cfg)
     if args.check:
         print(json.dumps(bridge.status({}), ensure_ascii=False, indent=2))
@@ -548,6 +583,8 @@ def main(argv=None) -> int:
     print(f"         http://{shown}:{cfg['port']}?token={cfg['token']}")
     if cfg["host"] in ("127.0.0.1", "localhost"):
         print("[bridge] 当前只允许本机访问；AstrBot 在其他机器上时，把 bridge.json 的 host 改为 0.0.0.0 后重启")
+    else:
+        print("[bridge] 安全提示：请仅在局域网内使用，不要把端口映射到公网，也不要把带 token 的地址发给他人")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -6,7 +6,7 @@
 
 **AstrBot 英雄联盟 / 云顶之弈数据插件**
 
-![version](https://img.shields.io/badge/version-1.3.1-C8AA6E)
+![version](https://img.shields.io/badge/version-1.3.2-C8AA6E)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10-0AC8B9)
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
@@ -134,7 +134,7 @@ flowchart LR
 | 部署方式 | 需要做什么 |
 |---|---|
 | 🖥️ AstrBot 和国服客户端在同一台 Windows 电脑 | 什么都不用配，登录客户端即可 |
-| ☁️ AstrBot 在服务器 / Docker / NAS | 游戏电脑双击 `bridge/start_bridge.bat`，把窗口显示的地址（含 `?token=`）填到「国服 → 远程国服代理」 |
+| ☁️ AstrBot 在服务器 / Docker / NAS | 游戏电脑双击 `bridge/start_bridge.bat`，把窗口显示的地址（含 `?token=`）填到「国服 → 远程国服代理」。仅限局域网使用，不要暴露到公网 |
 | 🟦 没有常开的游戏电脑 | 浏览器登录 [wegame.com.cn](https://www.wegame.com.cn)，从 Cookie 复制 `tgp_id`、`tgp_ticket` 填到「国服 → WeGame 凭证」 |
 
 | 数据源 | 战绩 / 单局 | 段位 | 维护 |

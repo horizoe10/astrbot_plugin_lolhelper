@@ -8,12 +8,12 @@ change without notice.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 from urllib.parse import unquote
 
 import aiohttp
 
+from .log import default_logger
 from .constants import POSITION_FROM_API, QUEUE_ID_ZH, resolve_cn_server
 from .errors import BridgeError, NotFoundError
 from .gamedata import GameData
@@ -58,11 +58,11 @@ def wg_server(area: int | str) -> str:
 
 
 class WeGameClient:
-    def __init__(self, http: HttpClient | None, cookie: str = "", timeout: float = 15, logger: logging.Logger | None = None):
+    def __init__(self, http: HttpClient | None, cookie: str = "", timeout: float = 15, logger: Any = None):
         self.http = http
         self.cookie = parse_cookie(cookie)
         self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self.expired = False
 
     @property

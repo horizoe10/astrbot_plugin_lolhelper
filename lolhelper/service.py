@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
+from .log import default_logger
 from .cache import TTLCache
 from .constants import (
     GAME_MODES,
@@ -178,12 +178,12 @@ class OpggService:
         mcp: OpggMcpClient,
         gamedata: GameData,
         config: ServiceConfig | None = None,
-        logger: logging.Logger | None = None,
+        logger: Any = None,
     ):
         self.mcp = mcp
         self.gd = gamedata
         self.cfg = config or ServiceConfig()
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self.cache = TTLCache(1024)
         self.esp = None  # EsportsClient, set by the facade
         self.web = None  # OpggWebClient (OP.GG website stats), set by the facade

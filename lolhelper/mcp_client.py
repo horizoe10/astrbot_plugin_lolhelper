@@ -10,11 +10,11 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
-import logging
 from typing import Any
 
 import aiohttp
 
+from .log import default_logger
 from . import VERSION
 from .dsl import parse_opgg_text
 from .errors import NotFoundError, UpstreamError
@@ -33,13 +33,13 @@ class OpggMcpClient:
         endpoint: str = "https://mcp-api.op.gg/mcp",
         limiter: RateLimiter | None = None,
         tool_overrides: dict[str, str] | None = None,
-        logger: logging.Logger | None = None,
+        logger: Any = None,
     ):
         self.http = http
         self.endpoint = endpoint.rstrip("/") if endpoint else "https://mcp-api.op.gg/mcp"
         self.limiter = limiter or RateLimiter(4, 0.15)
         self.tool_overrides = tool_overrides or {}
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self._sid: str | None = None
         self._protocol = PROTOCOL_VERSION
         self._init_lock = asyncio.Lock()

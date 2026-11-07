@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 import ssl
 import time
@@ -11,6 +10,7 @@ from typing import Any
 
 import aiohttp
 
+from .log import default_logger
 from . import VERSION
 from .errors import UpstreamError
 
@@ -56,12 +56,12 @@ class HttpClient:
         self,
         proxy: str | None = None,
         timeout: float = 20,
-        logger: logging.Logger | None = None,
+        logger: Any = None,
         user_agent: str = DEFAULT_UA,
     ):
         self.proxy = proxy or None
         self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self.user_agent = user_agent
         self._session: aiohttp.ClientSession | None = None
 

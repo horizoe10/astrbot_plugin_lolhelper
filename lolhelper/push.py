@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 from datetime import datetime
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
+from .log import default_logger
 from .doc import Doc
 from .errors import LolHelperError
 from .fmt import get_tz, local_time, parse_time
@@ -26,10 +26,10 @@ SUB_TYPES = {
 
 
 class PushManager:
-    def __init__(self, facade, send: SendFn, logger: logging.Logger | None = None):
+    def __init__(self, facade, send: SendFn, logger: Any = None):
         self.f = facade
         self.send = send
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self._task: asyncio.Task | None = None
         self._last: dict[str, float] = {}
 

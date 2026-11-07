@@ -9,12 +9,12 @@ Sources (all cached on disk and refreshed periodically):
 from __future__ import annotations
 
 import asyncio
-import logging
 import re
 import time
 from pathlib import Path
 from typing import Any
 
+from .log import default_logger
 from .cache import JsonStore
 from .errors import NotFoundError
 from .net import HttpClient
@@ -39,14 +39,14 @@ class GameData:
         cdragon_base: str = "https://raw.communitydragon.org",
         refresh_hours: float = 24,
         custom_aliases: dict[str, str] | None = None,
-        logger: logging.Logger | None = None,
+        logger: Any = None,
     ):
         self.http = http
         self.ddragon = ddragon_base.rstrip("/")
         self.cdragon = cdragon_base.rstrip("/")
         self.refresh_seconds = max(1.0, refresh_hours) * 3600
         self.custom_aliases = custom_aliases or {}
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self.lol_store = JsonStore(Path(data_dir) / "gamedata_lol.json")
         self.tft_store = JsonStore(Path(data_dir) / "gamedata_tft.json")
         self.lol: dict[str, Any] = {}

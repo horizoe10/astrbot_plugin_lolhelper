@@ -10,12 +10,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
-import logging
 import time
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from ..log import default_logger
 from ..doc import Doc
 from .html import load_template, template_data
 
@@ -105,7 +105,7 @@ class ImageRenderer:
         quality: int = 85,
         width: int = 760,
         max_rows: int = 15,
-        logger: logging.Logger | None = None,
+        logger: Any = None,
         fetch: FetchFn | None = None,
     ):
         self.out_dir = Path(out_dir)
@@ -116,7 +116,7 @@ class ImageRenderer:
         self.quality = max(10, min(100, int(quality)))
         self.width = width
         self.max_rows = max_rows
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self.inliner = IconInliner(fetch) if fetch else None
         try:
             import playwright  # noqa: F401

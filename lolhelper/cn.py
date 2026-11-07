@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-import logging
 import os
 import time
 from pathlib import Path
@@ -18,6 +17,7 @@ from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import aiohttp
 
+from .log import default_logger
 from .constants import POSITION_FROM_API, QUEUE_ID_ZH, cn_server_name
 from .doc import Cell, Doc
 from .errors import BridgeError, NotFoundError
@@ -46,13 +46,13 @@ def parse_remote(url: str, token: str = "") -> tuple[str, str]:
 
 class CnBridgeClient:
     def __init__(self, http: HttpClient, url: str = "", token: str = "", timeout: float = 15,
-                 bridge_file: Path | None = None, logger: logging.Logger | None = None):
+                 bridge_file: Path | None = None, logger: Any = None):
         self.http = http
         self.url, self.token = parse_remote(url, token)
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.request_timeout = timeout
         self.bridge_file = Path(bridge_file or BRIDGE_FILE)
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self._mod = None
         self._bridge = None
 
@@ -75,6 +75,7 @@ class CnBridgeClient:
             spec = importlib.util.spec_from_file_location("lolhelper_cn_bridge", self.bridge_file)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
+            mod.log = self.logger  # log through AstrBot's logger when running in-process
             cfg = dict(mod.DEFAULT_CONFIG)
             cfg["request_timeout"] = self.request_timeout
             self._mod, self._bridge = mod, mod.Bridge(cfg)
@@ -249,14 +250,14 @@ QUEUE_NAMES = {
 class CnService:
     """China server queries. Data source order: League client (built-in / remote bridge), then WeGame."""
 
-    def __init__(self, bridge: CnBridgeClient, svc: OpggService, logger: logging.Logger | None = None,
+    def __init__(self, bridge: CnBridgeClient, svc: OpggService, logger: Any = None,
                  wegame: "WeGameClient | None" = None):
         from .wegame import WeGameClient
 
         self.bridge = bridge
         self.svc = svc
         self.gd = svc.gd
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         self.wg = wegame or WeGameClient(None)
         self._ids: dict[tuple, Any] = {}  # (kind, name, tag, server) -> puuid / (openid, area)
 

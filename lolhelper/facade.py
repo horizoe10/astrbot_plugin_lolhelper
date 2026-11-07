@@ -7,10 +7,10 @@ module stays importable without AstrBot.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
+from .log import default_logger
 from .args import Target
 from .cn import CnBridgeClient, CnService
 from .constants import POSITIONS, resolve_cn_server
@@ -31,11 +31,11 @@ from .fmt import set_default_tz
 
 
 class Facade:
-    def __init__(self, settings: Settings, data_dir: Path, html_render=None, logger: logging.Logger | None = None):
+    def __init__(self, settings: Settings, data_dir: Path, html_render=None, logger: Any = None):
         self.s = settings
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.logger = logger or logging.getLogger("lolhelper")
+        self.logger = logger or default_logger
         set_default_tz(settings.timezone)
         self.http = HttpClient(proxy=settings.proxy or None, timeout=settings.timeout, logger=self.logger)
         self.mcp = OpggMcpClient(
