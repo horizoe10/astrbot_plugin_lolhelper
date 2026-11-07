@@ -252,12 +252,13 @@
   "cn": {
     "description": "国服",
     "type": "object",
-    "hint": "AstrBot 与国服客户端在同一台 Windows 电脑上时无需设置；否则填写「远程国服代理」或「WeGame 凭证」任意一项",
+    "hint": "默认关闭。开启后：AstrBot 与国服客户端在同一台 Windows 电脑上时无需其他设置；否则填写「远程国服代理」或「WeGame 凭证」任意一项",
     "items": {
       "enabled": {
-        "description": "启用国服查询",
+        "description": "启用国服战绩查询（默认关闭）",
         "type": "bool",
-        "default": true
+        "default": false,
+        "hint": "风险提示：本功能通过英雄联盟客户端本地接口（LCU API）或 WeGame 网页接口读取战绩数据，二者均非腾讯官方开放的数据服务。国服对第三方工具的管理政策可能调整，使用本功能存在账号被限制或处罚的风险，由使用者自行承担。如对账号安全有顾虑，请保持关闭。"
       },
       "default_server": {
         "description": "绑定国服时的默认大区",

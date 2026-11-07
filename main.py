@@ -435,7 +435,7 @@ class LolHelperPlugin(Star):
             yield self._plain(event, f"用法：/lol 绑定国服 名字#编号 [大区]\n可用大区：{names}\n（旧大区名如 祖安、德玛西亚 会自动映射到合并后的大区）")
             return
         if not self.settings.cn_enabled:
-            yield self._plain(event, "国服功能未启用（插件配置 cn.enabled）")
+            yield self._plain(event, "国服战绩查询未开启，可在插件配置「国服 → 启用国服战绩查询」中开启（开启前请阅读风险提示）")
             return
         yield await self._bind(event, a.words, force_cn=True)
 

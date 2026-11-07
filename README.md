@@ -6,7 +6,7 @@
 
 **AstrBot 英雄联盟 / 云顶之弈数据插件**
 
-![version](https://img.shields.io/badge/version-1.3.0-C8AA6E)
+![version](https://img.shields.io/badge/version-1.3.1-C8AA6E)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10-0AC8B9)
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
@@ -117,6 +117,10 @@ flowchart LR
 
 OP.GG 不收录国服，插件通过登录着的国服客户端（参考 League Akari 的 LCU + SGP 方案）或 WeGame 查询。
 
+> [!WARNING]
+> 国服战绩查询**默认关闭**，需在插件配置「国服 → 启用国服战绩查询」中手动开启。
+> 本功能通过客户端本地接口（LCU API）或 WeGame 网页接口读取数据，二者均非腾讯官方开放的数据服务，存在账号被限制或处罚的风险，由使用者自行承担。如对账号安全有顾虑，请保持关闭。
+
 ```mermaid
 flowchart LR
   B[🤖 联盟助手] --> Q{同一台电脑<br/>有国服客户端?}
@@ -152,7 +156,7 @@ flowchart LR
 | 🖼️ 输出 | 默认输出方式 · 图片主题 · 显示指令引导 · 支持 Markdown 的平台 |
 | 🔎 查询 | 外服默认大区 · 战绩默认场次 |
 | 📊 英雄数据 | 数据地区（全球 / 韩服） · 段位范围（默认翡翠+） |
-| 🇨🇳 国服 | 启用 · 默认大区 · 远程国服代理（可选） · WeGame 凭证（可选） |
+| 🇨🇳 国服 | 启用（默认关闭） · 默认大区 · 远程国服代理（可选） · WeGame 凭证（可选） |
 | 🏆 赛事 | 赛程默认赛事（未订阅的会话默认只看这些） |
 | 🔔 推送 | 启用 · 新对局检查间隔 · 开赛提醒 · 赛果附带每局数据 · 日报时刻 · 仅管理员订阅 |
 | 🏷️ 别名 | 英雄自定义别名 |

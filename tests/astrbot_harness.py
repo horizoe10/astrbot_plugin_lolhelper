@@ -183,7 +183,7 @@ async def main() -> int:
     runner, bridge_url = await start_fake_bridge()
     ctx = FakeContext()
     await ctx.html_renderer.initialize()
-    conf = {"cn": {"bridge_url": f"{bridge_url}?token=tk"}}
+    conf = {"cn": {"enabled": True, "bridge_url": f"{bridge_url}?token=tk"}}
     plugin = mod.LolHelperPlugin(ctx, conf)
     await plugin.initialize()
 
@@ -241,7 +241,7 @@ async def main() -> int:
         ("tft 强化 贷款 -t", "tft_augment", "贷款"),
         ("tft 阵容 -i", "tft_meta", "<image"),
         ("lol 大区", "lol_regions", "艾欧尼亚"),
-        ("lol 状态", "lol_status", "联盟助手 v1.3.0"),
+        ("lol 状态", "lol_status", "联盟助手 v1.3.1"),
         ("lol 帮助", "lol_help", "/lol 英雄"),
     ]
     for text, want_handler, want in cases:

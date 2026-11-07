@@ -76,7 +76,7 @@ class Settings:
     ttl_esports: float = 300
     ttl_tft: float = 3600
     # china (empty bridge url = built-in, talks to the client on this machine)
-    cn_enabled: bool = True
+    cn_enabled: bool = False
     cn_bridge_url: str = ""
     cn_bridge_token: str = ""
     cn_wegame_cookie: str = ""

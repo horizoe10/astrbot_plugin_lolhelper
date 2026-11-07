@@ -137,7 +137,7 @@ class Facade:
     async def account_from_target(self, tgt: Target) -> dict:
         if tgt.is_cn:
             if not self.s.cn_enabled:
-                raise UsageError("国服查询未启用（插件配置 cn.enabled）")
+                raise UsageError("国服战绩查询未开启，可在插件配置「国服 → 启用国服战绩查询」中开启（开启前请阅读风险提示）")
             server = tgt.cn_server or self.s.cn_default_server or None
             return await self.cn.resolve_account(tgt.game_name, tgt.tag_line, server)
         return {
@@ -150,7 +150,7 @@ class Facade:
     async def summoner(self, account: dict, count: int | None = None, detail: bool = False) -> View:
         if account.get("kind") == "cn":
             if not self.s.cn_enabled:
-                raise UsageError("国服查询未启用（插件配置 cn.enabled）")
+                raise UsageError("国服战绩查询未开启，可在插件配置「国服 → 启用国服战绩查询」中开启（开启前请阅读风险提示）")
             return await self.cn.summoner(account, count, detail)
         return await self.svc.summoner(account["game_name"], account["tag_line"], account.get("region"), count, detail)
 
@@ -164,7 +164,7 @@ class Facade:
     async def game_detail(self, account: dict, index: int = 1) -> View:
         if account.get("kind") == "cn":
             if not self.s.cn_enabled:
-                raise UsageError("国服查询未启用（插件配置 cn.enabled）")
+                raise UsageError("国服战绩查询未开启，可在插件配置「国服 → 启用国服战绩查询」中开启（开启前请阅读风险提示）")
             return await self.cn.game_detail(account, index)
         return await self.svc.game_detail(account["game_name"], account["tag_line"], account.get("region"), index)
 
