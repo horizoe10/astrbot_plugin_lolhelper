@@ -4,6 +4,6 @@ The package is intentionally independent from AstrBot so it can be tested and
 reused by the local HTTP API without a running bot.
 """
 
-VERSION = "1.3"
+VERSION = "1.3.0"
 PLUGIN_NAME = "astrbot_plugin_lolhelper"
 

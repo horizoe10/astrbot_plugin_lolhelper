@@ -6,7 +6,7 @@ desc: |
   英雄出装与克制、海克斯大乱斗、版本梯队、召唤师战绩、电竞赛程 / 赛况 / 积分、云顶阵容 / 英雄出装 / 装备 / 强化符文。
   支持纯文本、Markdown、图片整合三种推送方式，账号绑定与新对局推送，
   内置国服客户端连接（参考 League Akari 的 LCU + SGP 方案）查询国服战绩，也支持远程代理。
-version: "1.3"
+version: "1.3.0"
 author: horizoe10
 repo: https://github.com/horizoe10/astrbot_plugin_lolhelper
 astrbot_version: ">=4.10.0"

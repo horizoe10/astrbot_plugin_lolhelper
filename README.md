@@ -6,7 +6,7 @@
 
 **AstrBot 英雄联盟 / 云顶之弈数据插件**
 
-![version](https://img.shields.io/badge/version-1.3-C8AA6E)
+![version](https://img.shields.io/badge/version-1.3.0-C8AA6E)
 ![AstrBot](https://img.shields.io/badge/AstrBot-%E2%89%A54.10-0AC8B9)
 ![python](https://img.shields.io/badge/python-%E2%89%A53.10-3776AB)
 ![data](https://img.shields.io/badge/data-OP.GG%20MCP-5383E8)
