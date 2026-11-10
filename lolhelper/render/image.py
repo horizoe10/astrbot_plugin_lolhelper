@@ -101,23 +101,23 @@ class ImageRenderer:
         out_dir: Path,
         html_render: HtmlRenderFn | None = None,
         strategy: str = "auto",
-        theme: str = "dark",
         quality: int = 85,
         width: int = 760,
         max_rows: int = 15,
         logger: Any = None,
         fetch: FetchFn | None = None,
+        art: Any = None,
     ):
         self.out_dir = Path(out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.html_render = html_render
         self.strategy = strategy
-        self.theme = theme
         self.quality = max(10, min(100, int(quality)))
         self.width = width
         self.max_rows = max_rows
         self.logger = logger or default_logger
         self.inliner = IconInliner(fetch) if fetch else None
+        self.art = art  # ArtProcessor: LoL Esports team logos, compact banner art
         try:
             import playwright  # noqa: F401
 
@@ -126,9 +126,15 @@ class ImageRenderer:
             self._playwright_ok = False
 
     async def _data(self, doc: Doc, min_width: int = 0) -> dict[str, Any]:
-        data = template_data(doc, self.theme, self.max_rows, self.width)
-        if min_width and data["width"] < min_width:
-            data["width"] = min_width  # fill the render service's fixed viewport: no empty strip on the right
+        # min_width fills the render service's fixed viewport: no empty strip on the right
+        data = template_data(doc, self.max_rows, self.width, min_width)
+        if self.art:
+            try:
+                data["doc"] = await asyncio.wait_for(self.art.prepare(data["doc"]), timeout=15)
+            except asyncio.TimeoutError:
+                self.logger.info("[lolhelper] 队标和横幅图处理超时，本次按原图显示")
+            except Exception as exc:
+                self.logger.info(f"[lolhelper] 队标和横幅图处理失败，本次按原图显示：{exc}")
         if self.inliner:
             try:
                 data["doc"] = await asyncio.wait_for(self.inliner.inline(data["doc"]), timeout=15)

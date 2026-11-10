@@ -17,6 +17,19 @@ from .errors import UpstreamError
 DEFAULT_UA = f"astrbot_plugin_lolhelper/{VERSION} (+https://github.com/horizoe10/astrbot_plugin_lolhelper)"
 
 
+def image_type(data: bytes) -> str | None:
+    """MIME type of image bytes from their signature, for servers that label images as octet-stream."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
 def make_ssl_context() -> ssl.SSLContext:
     """Prefer certifi's CA bundle (shipped with AstrBot) over the OS store."""
     try:

@@ -6,7 +6,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from lolhelper.gamedata import GameData  # noqa: E402
+from lolhelper.gamedata import SCHEMA, GameData  # noqa: E402
 from lolhelper.net import HttpClient  # noqa: E402
 
 
@@ -27,7 +27,7 @@ def gd(tmp_path):
         "spell_icons": {"4": "SummonerFlash.png", "14": "SummonerDot.png"},
         "rune_icons": {"8005": "perk-images/Styles/Precision/PressTheAttack/PressTheAttack.png", "8100": "perk-images/Styles/7200_Domination.png"},
         "rune_names": {"8005": "强攻", "8100": "主宰"},
-        "schema": 3,
+        "schema": SCHEMA,
     }
     g._index_lol()
     g.tft = {
@@ -42,7 +42,7 @@ def gd(tmp_path):
         "champions": {"DA_18_Caitlyn": {"name": "凯特琳", "cost": 1, "traits": ["日蚀骑士"], "icon": None}},
         "traits": {"DA_18_Solar": "日蚀骑士"},
         "trait_icons": {"DA_18_Solar": "https://raw.communitydragon.org/latest/game/assets/ux/traiticons/trait_icon_18_solar.png"},
-        "schema": 3,
+        "schema": SCHEMA,
     }
     g._index_tft()
     return g

@@ -67,6 +67,23 @@ class FakeContext:
         self.sent.append((umo, chain))
         return True
 
+    # AI review: a fake chat model that answers with a fixed JSON review
+    llm_calls = []
+
+    async def get_current_chat_provider_id(self, umo):
+        return "fake-llm"
+
+    def get_using_provider(self, umo=None):
+        return None
+
+    def get_provider_by_id(self, pid):
+        return None
+
+    async def llm_generate(self, *, chat_provider_id, prompt=None, system_prompt=None, **kw):
+        from types import SimpleNamespace
+        FakeContext.llm_calls.append((chat_provider_id, system_prompt, prompt))
+        return SimpleNamespace(completion_text='{"summary": "测试总评", "highlights": ["亮点一 KDA 3.25"], "issues": ["问题一"], "advice": "建议一"}')
+
 
 def make_event(text: str, platform: str = "aiocqhttp", sender: str = "10001", group: bool = True, at: str | None = None):
     msg = AstrBotMessage()
@@ -177,13 +194,15 @@ async def main() -> int:
     print("handlers:", names)
     check(len(handlers) >= 30, f"registered {len(handlers)} handlers")
     tools = {t.name: t for t in llm_tools.func_list if t.name.startswith("lolhelper_")}
-    check(set(tools) == {"lolhelper_champion_build", "lolhelper_summoner", "lolhelper_tier_list", "lolhelper_tft_meta", "lolhelper_esports"}, "llm tools registered")
+    check(set(tools) == {"lolhelper_champion_build", "lolhelper_summoner", "lolhelper_tier_list", "lolhelper_tft_meta", "lolhelper_esports",
+                         "lolhelper_command_help", "lolhelper_standings", "lolhelper_esports_match", "lolhelper_recent_form",
+                         "lolhelper_tft_lookup", "lolhelper_group_ranking"}, "llm tools registered")
     check("champion" in (tools["lolhelper_champion_build"].parameters or {}).get("properties", {}), "llm tool params parsed from docstring")
 
     runner, bridge_url = await start_fake_bridge()
     ctx = FakeContext()
     await ctx.html_renderer.initialize()
-    conf = {"cn": {"enabled": True, "bridge_url": f"{bridge_url}?token=tk"}}
+    conf = {"cn": {"enabled": True, "bridge_url": f"{bridge_url}?token=tk"}, "ai": {"cooldown_sec": 0}}
     plugin = mod.LolHelperPlugin(ctx, conf)
     await plugin.initialize()
 
@@ -227,6 +246,9 @@ async def main() -> int:
         ("lol 订阅 赛事 LPL", "lol_subscribe", "LPL"),
         ("lol 订阅列表", "lol_subs", "新对局"),
         ("lol 退订 all", "lol_unsubscribe", "已取消 3"),
+        ("lol 订阅 列表", "lol_subscribe", "没有订阅"),
+        ("lol 订阅 赛事 LCK", "lol_subscribe", "已订阅"),
+        ("lol 订阅 取消 all", "lol_subscribe", "已取消 1"),
         ("lol 国服状态", "lol_cn_status", "已连接客户端"),
         ("lol 赛程 -t", "lol_schedule", "赛程"),
         ("lol 积分 LCK -t", "lol_standings", "积分榜"),
@@ -241,8 +263,34 @@ async def main() -> int:
         ("tft 强化 贷款 -t", "tft_augment", "贷款"),
         ("tft 阵容 -i", "tft_meta", "<image"),
         ("lol 大区", "lol_regions", "艾欧尼亚"),
-        ("lol 状态", "lol_status", "联盟助手 v1.4.0"),
+        ("lol 状态", "lol_status", "联盟助手 v2.0.0"),
         ("lol 帮助", "lol_help", "/lol 英雄"),
+        ("lol 帮助 赛事", "lol_help", "/lol 赛况 [序号|战队] [局号]"),
+        ("lol 帮助 竞猜", "lol_help", "别名："),
+        ("lol 帮助 全部", "lol_help", "全部指令"),
+        ("lol 帮助 -i", "lol_help", "<image"),
+        ("lol 菜单", "lol_help", "帮助菜单"),
+        ("tft 帮助", "tft_help", "/tft 阵容"),
+        ("lol 积分 -t", "lol_standings", "示例：/lol 积分 LPL"),
+        ("lol 点评 Hide on bush#KR1 kr -t", "lol_review", "测试总评"),
+        ("lol 锐评 Hide on bush#KR1 kr -t", "lol_review", "锐评"),
+        ("lol 诊断 Hide on bush#KR1 kr 8 -t", "lol_diagnose", "测试总评"),
+        ("lol 赛况点评 worlds 1 1 幽默 -t", "lol_match_review", "测试总评"),
+        ("lol 赛况点评 worlds 1 -t", "lol_match_review", "测试总评"),
+        ("lol 群成员", "lol_group_members", "上榜群友"),
+        ("lol 日榜 -t", "lol_daily_board", "群"),
+        ("lol 周榜 上周 -t", "lol_weekly_board", "周"),
+        ("lol 榜单 -t", "lol_boards", "群"),
+        ("lol 榜单 竞猜 -t", "lol_boards", "竞猜"),
+        ("lol 群播报", "lol_group_broadcast", "群友播报"),
+        ("lol 群播报 关", "lol_group_broadcast", "已关闭"),
+        ("lol 对比 Kingen#KR1 kr -t", "lol_pk", "vs"),
+        ("lol 今天玩什么 中单 -t", "lol_random", "今天玩"),
+        ("lol 分队 甲 乙 丙 丁 戊 -t", "lol_split", "蓝队"),
+        ("lol 竞猜 -t", "lol_bet", "竞猜"),
+        ("lol 猜英雄榜", "lol_quiz_board", "猜英雄"),
+        ("lol 下榜", "lol_leave_board", "已退出"),
+        ("lol 上榜", "lol_join_board", "已加入"),
     ]
     for text, want_handler, want in cases:
         t0 = time.time()
@@ -274,6 +322,27 @@ async def main() -> int:
     # remote CN bridge address with the token in the URL
     check(plugin.f.bridge.mode == "remote" and plugin.f.bridge.token == "tk", "remote cn address carries token")
 
+    # AI review: cached reviews skip the model; the cooldown only applies to real model calls
+    n_calls = len(FakeContext.llm_calls)
+    _, out = await run("lol 点评 Hide on bush#KR1 kr -t")
+    check("测试总评" in out and len(FakeContext.llm_calls) == n_calls, "ai review served from cache")
+    plugin.settings.ai_cooldown = 60
+    _, out = await run("lol 点评 2 Hide on bush#KR1 kr -t")
+    _, out2 = await run("lol 点评 3 Hide on bush#KR1 kr -t")
+    check("冷却中" in out2, "ai review cooldown")
+    plugin.settings.ai_cooldown = 0
+    # guess-the-champion: a plain group message with the answer wins the round
+    _, out = await run("lol 猜英雄 技能名")
+    umo_q = next(iter(plugin.groups.quizzes), None)
+    answer = plugin.groups.quizzes[umo_q]["name"].split(" ")[-1] if umo_q else ""
+    wrong = [r async for r in plugin.quiz_answer(make_event("这题好难"))]
+    right = [describe(r) async for r in plugin.quiz_answer(make_event(answer))]
+    check("猜英雄" in out and not wrong and right and "答对了" in right[0] and not plugin.groups.quizzes, f"quiz answered ({answer})")
+    _, out = await run("lol 不猜了")
+    check("没有进行中" in out, "quiz end without a quiz")
+    sys_prompt = FakeContext.llm_calls[-1][1] if FakeContext.llm_calls else ""
+    check("只使用数据里出现的事实" in sys_prompt, "ai system prompt forbids made-up facts")
+
     # WeGame QR login: routes to the handler and first replies with a QR image (stop before scanning)
     md = find_handler(handlers, "lol WeGame登录")
     check(md is not None and md.handler_name == "lol_wegame_login", "wegame login command routed")
@@ -292,6 +361,44 @@ async def main() -> int:
     check(plugin.config["cn"]["wegame_cookie"].startswith("a=1") and plugin.f.wegame.cookie == "tgp_id=123; tgp_ticket=ABC",
           "wegame cookie saved to config and client")
 
+    # WeGame keep-alive: reminder before expiry, auto QR after expiry, only once per credential
+    import time as _t
+    dm = "testbot:FriendMessage:10001"
+    await plugin._wegame_record(dm, "QQ", "tester", _t.time() + 3600)
+    state = {"ok": True}
+
+    async def fake_check():
+        return state["ok"]
+
+    plugin.f.wegame.check = fake_check
+    autos = []
+
+    async def fake_auto(umo, wechat, reason):
+        autos.append((umo, wechat, reason))
+
+    plugin._wegame_auto = fake_auto
+    n0 = len(ctx.sent)
+    plugin.f.store.data["push_state"]["wegame"]["last_check"] = 0
+    await plugin._wegame_tick()
+    check(len(ctx.sent) == n0 + 1 and "过期" in ctx.sent[-1][1].chain[0].text, "wegame reminds before expiry")
+    plugin.f.store.data["push_state"]["wegame"]["last_check"] = 0
+    await plugin._wegame_tick()
+    check(len(ctx.sent) == n0 + 1, "wegame reminder sent only once")
+    state["ok"] = False
+    plugin.f.store.data["push_state"]["wegame"]["last_check"] = 0
+    await plugin._wegame_tick()
+    await asyncio.sleep(0.05)
+    check(len(autos) == 1 and autos[0][0] == dm and "已过期" in autos[0][2], "wegame expiry triggers auto QR")
+    plugin.f.store.data["push_state"]["wegame"]["last_check"] = 0
+    await plugin._wegame_tick()
+    await asyncio.sleep(0.05)
+    check(len(autos) == 1, "wegame auto QR only once per credential")
+    meta = plugin.f.store.state("wegame")
+    check(meta.get("lifetimes") and meta.get("expired_at"), "wegame lifetime recorded")
+    view = await plugin.f.cn_status()
+    txt = plugin.f.text(view)
+    check("以往有效时长" in txt and "上次扫码的会话" in txt, "cn status shows wegame credential details")
+
     # compat entry: empty wake prefix (QQ official bots) -> slash commands / bare commands without @
     async def compat(text, woken):
         ev = make_event(text)
@@ -309,6 +416,72 @@ async def main() -> int:
     check(out == "", "compat: chat starting with lol is ignored")
     out, _ = await compat("lol 帮助", True)
     check(out == "", "compat: woken plain command left to AstrBot (no double reply)")
+
+    # guide: bare /lol, number replies, direct queries and typo suggestions
+    gf = mod.LolHelperPlugin.lol.parent_group
+    check(gf.filter(make_event("lol"), {}) is False and gf.filter(make_event("lol 战绩"), {}) is True,
+          "guide: bare /lol no longer triggers AstrBot's command tree")
+    out, stopped = await compat("lol", True)
+    check("主菜单" in out and "1. 📜 战绩与账号" in out and stopped, "guide: bare /lol shows the help menu")
+    out, _ = await compat("3", False)
+    check("🏆 赛事" in out and "/lol 赛程" in out, "guide: number reply opens a category")
+    out, _ = await compat("0", False)
+    check("帮助菜单" in out, "guide: 0 goes back to the main menu")
+    other = make_event("3", sender="20002")
+    other.is_at_or_wake_command = False
+    outs = [describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, other)]
+    check(not outs, "guide: number replies only count for the person who opened the menu")
+    out, _ = await compat("lol 战积", True)
+    check("你是不是想找" in out and "/lol 战绩" in out, "guide: typo suggests the command")
+    out, _ = await compat("lol 哈哈哈", False)
+    check(out == "", "guide: unwoken chat is still ignored")
+    out, _ = await compat("lol 亚索 -t", True)
+    check("疾风剑豪" in out, "guide: /lol <champion> shows the build")
+    out, _ = await compat("lol LPL -t", True)
+    check("赛程" in out, "guide: /lol <league> shows the schedule")
+    out, _ = await compat("lol 中单 -t", True)
+    check("中单" in out and "梯队" in out, "guide: /lol <position> shows the tier list")
+    out, _ = await compat("lol Hide on bush#KR1 kr -t", True)
+    check("Hide on bush#KR1" in out, "guide: /lol <riot id> shows the matches")
+    out, _ = await compat("lol BLG -t", True)
+    check("每局数据" in out or "BLG" in out, "guide: /lol <team> shows the series")
+    out, _ = await compat("tft", True)
+    check("云顶之弈" in out and "/tft 阵容" in out, "guide: bare /tft shows the TFT commands")
+    out, _ = await compat("tft 大天使 -t", True)
+    check("携带英雄排行" in out, "guide: /tft <item> shows the item")
+
+    # menu buttons (AstrBot 4.29+): built from the categories, a click opens the category with its own buttons
+    if hasattr(Comp, "ActionRow"):
+        check(any(h.handler_name == "menu_button" and any(type(f).__name__ == "ButtonActionFilter" for f in h.event_filters)
+                  for h in handlers), "guide: button handler registered")
+        rows = plugin._button_rows(plugin._guide_ctx(make_event("x")), None)
+        check(len(rows) == 2 and rows[0].buttons[0].id == "lolhelper:menu:account" and rows[0].fallback_text, "guide: menu buttons built")
+        ev = make_event("", platform="telegram")
+        ev.message_obj.message = [Comp.ButtonInteraction(action_id="lolhelper:menu:esports", data={"k": "esports"}, interaction_id="1")]
+        sent = []
+
+        async def fake_send(chain):
+            sent.append(chain)
+
+        ev.send = fake_send
+        outs = [describe(r) async for r in plugin.menu_button(ev)]
+        kinds = [type(c).__name__ for c in sent[0].chain] if sent else []
+        check(sent and "🏆 赛事" in sent[0].chain[0].text and "ActionRow" in kinds and not outs, f"guide: button click opens the category {kinds}")
+        ev = make_event("lol", platform="telegram")
+        ev.send = fake_send
+        sent.clear()
+        out = [describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)]
+        check(sent and "主菜单" in sent[0].chain[0].text and not out, "guide: menu goes out with buttons on supported platforms")
+
+        async def broken_send(chain):
+            raise RuntimeError("keyboard not allowed")
+
+        ev = make_event("lol", platform="telegram")
+        ev.send = broken_send
+        out = "".join([describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)])
+        check("主菜单" in out, "guide: menu falls back to text when buttons fail")
+    txt = await plugin.llm_command_help(make_event("x"), "竞猜")
+    check("/lol 竞猜" in txt, "guide: llm command help tool")
 
     await plugin.terminate()
     await runner.cleanup()

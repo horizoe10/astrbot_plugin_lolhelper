@@ -138,6 +138,9 @@ class CnBridgeClient:
     async def game(self, game_id: str, server: str) -> dict:
         return await self.get("/v1/game", game_id=game_id, server=server)
 
+    async def timeline(self, game_id: str, server: str) -> dict:
+        return await self.get("/v1/timeline", game_id=game_id, server=server)
+
 
 # ------------------------------------------------------------------ normalizers
 def _participant_common(p: dict, gd: GameData) -> dict:
@@ -167,6 +170,7 @@ def normalize_sgp_games(raw: dict | None, puuid: str, gd: GameData) -> list[dict
             "duration": j.get("gameDuration"),
             "position": POSITION_FROM_API.get(str(me.get("teamPosition") or me.get("individualPosition") or "").upper()),
             "items": items,
+            "role_item": me.get("roleBoundItem") or None,
             "kills": me.get("kills"),
             "deaths": me.get("deaths"),
             "assists": me.get("assists"),
@@ -204,7 +208,7 @@ def normalize_lcu_games(raw: dict | None, puuid: str, gd: GameData) -> list[dict
             "queue": QUEUE_ID_ZH.get(int(g.get("queueId") or -1), f"模式{g.get('queueId')}"),
             "duration": g.get("gameDuration"),
             "position": POSITION_FROM_API.get(str(tl.get("lane") or "").upper()),
-            "items": [st.get(f"item{i}") for i in range(7) if st.get(f"item{i}")],
+            "items": [st.get(f"item{i}") for i in range(7) if st.get(f"item{i}")], "role_item": st.get("roleBoundItem") or None,
             "kills": st.get("kills"),
             "deaths": st.get("deaths"),
             "assists": st.get("assists"),
@@ -423,21 +427,25 @@ class CnService:
             theme="cn",
         )
         tiles = []
+        queues = []
         for r in ranked:
             q = QUEUE_NAMES.get(r["queue"], r["queue"])
             t = tier_text(r["tier"], r["division"], r["lp"])
             if r["queue"] in ("RANKED_SOLO_5x5", "RANKED_FLEX_SR") or detail:
                 tiles.append(rank_tile(q, t, r["wins"], r["losses"], tier_emblem(r["tier"])))
+            if r["queue"] in ("RANKED_SOLO_5x5", "RANKED_FLEX_SR") and r.get("tier"):
+                queues.append({"queue": q, "tier": r["tier"], "division": r["division"], "lp": r["lp"], "w": r["wins"],
+                               "l": r["losses"], "emblem": tier_emblem(r["tier"]), "solo": r["queue"] == "RANKED_SOLO_5x5"})
         if not ranked:
             doc.badge("段位：" + ("跨区暂不可查" if ranked_err else "未定级"), "muted")
-        doc.add_tiles("段位", tiles)
+        doc.add_tiles("段位", tiles, style="hide" if queues and not detail else "")
         if matches:
             from .game import add_match_cards
 
-            doc.width = 880
+            doc.width = 920
             add_match_cards(
                 doc,
-                f"最近 {len(matches)} 场",
+                "最近战绩",
                 [m["_game"] for m in matches],
                 self.gd,
                 note=OpggService.match_summary(matches),
@@ -445,6 +453,9 @@ class CnService:
             OpggService.match_tips(doc, matches)
         else:
             doc.add_text("", "没有查到最近的对局记录")
+        chips = [{"text": "国服", "cls": "acc"}] + ([{"text": cn_server_name(server)}] if server else [])
+        doc.hero = self.svc.player_hero(account.get("game_name") or "", account.get("tag_line") or "",
+                                        self.gd.profile_icon(account.get("profile_icon")), account.get("level"), chips, queues, matches)
         from_wg = bool(matches) and str((matches[0].get("_game") or {}).get("source", "")).startswith("wegame")
         doc.footer = freshness(created) + (" · 数据来自 WeGame" if from_wg else " · 数据来自国服客户端")
         plain = [{k: v for k, v in m.items() if k != "_game"} for m in matches]
@@ -459,13 +470,24 @@ class CnService:
 
     async def game_detail(self, account: dict, index: int = 1) -> View:
         from .errors import UsageError
-        from .game import build_game_view, normalize_sgp_game
-        from .wegame import normalize_wg_game
+        from .game import build_game_view
 
         matches = await self.recent_matches(account, max(index, 5))
         if not 1 <= index <= len(matches):
             raise UsageError(f"只找到最近 {len(matches)} 场对局，序号需要在 1~{len(matches)} 之间")
-        m = matches[index - 1]
+        detail = await self.match_detail(account, matches[index - 1])
+        view = build_game_view(detail, self.gd, "cn", self.svc.cfg.timezone)
+        if detail.get("source") == "wegame":
+            view.doc.footer = view.doc.footer.replace("数据来自国服客户端", "数据来自 WeGame")
+            if "WeGame" not in view.doc.footer:
+                view.doc.footer += " · 数据来自 WeGame"
+        return view
+
+    async def match_detail(self, account: dict, m: dict) -> dict:
+        """Normalized game with all 10 players for one match-list entry."""
+        from .game import normalize_sgp_game
+        from .wegame import normalize_wg_game
+
         game = m.get("_game") or {}
         full = sum(len(t["players"]) for t in game.get("teams") or []) >= 2
         if game.get("source") in ("sgp", "wegame") and full:
@@ -479,14 +501,9 @@ class CnService:
             detail = normalize_sgp_game(raw, await self._puuid(account), self.gd)
         if not any(t["players"] for t in detail["teams"]):
             raise BridgeError("没有返回这局的玩家数据")
-        view = build_game_view(detail, self.gd, "cn", self.svc.cfg.timezone)
-        if detail.get("source") == "wegame":
-            view.doc.footer = view.doc.footer.replace("数据来自国服客户端", "数据来自 WeGame")
-            if "WeGame" not in view.doc.footer:
-                view.doc.footer += " · 数据来自 WeGame"
-        return view
+        return detail
 
-    async def status_view(self) -> View:
+    async def status_view(self, wg_meta: dict | None = None) -> View:
         try:
             st = await self.bridge.status()
         except BridgeError as exc:
@@ -494,18 +511,27 @@ class CnService:
         wg_state = "未配置"
         if self.wg.configured:
             try:
-                await self.wg.search("Uzi")
-                wg_state = "正常"
+                wg_state = "正常" if await self.wg.check() else "已过期，请发送 /lol WeGame登录 续期"
             except BridgeError as exc:
-                wg_state = "已过期，请更新" if self.wg.expired else f"异常：{exc}"
-        doc = Doc(title="国服连接状态", subtitle=self.bridge.label, theme="cn")
+                wg_state = f"异常：{exc}"
+        doc = Doc(title="国服连接状态", subtitle=self.bridge.label, theme="tool")
         if st.get("connected"):
-            doc.badge("已连接客户端", "win")
+            doc.badge("已连接客户端", "hx win")
         elif wg_state == "正常":
-            doc.badge("使用 WeGame", "win")
+            doc.badge("使用 WeGame", "hx win")
         else:
-            doc.badge("未连接客户端", "lose")
+            doc.badge("未连接客户端", "hx lose")
         cur = st.get("current") or {}
+        order = " → ".join("客户端" if s == "client" else "WeGame" for s in self.sources())
+        if st.get("connected"):
+            side = {"small": "国服客户端", "big": "已连接", "cls": "win",
+                    "sub": f"{cur.get('gameName')}#{cur.get('tagLine')}" if cur.get("gameName") else (st.get("server_name") or "")}
+        elif wg_state == "正常":
+            side = {"small": "查询来源", "big": "WeGame", "cls": "win", "sub": "客户端未连接"}
+        else:
+            side = {"small": "国服客户端", "big": "未连接", "cls": "lose", "sub": f"WeGame {wg_state}"}
+        doc.hero = {"name": "国服连接状态", "sub": self.bridge.label, "side": side, "wm": "mark",
+                    "chips": [{"text": "远程代理" if self.bridge.mode == "remote" else "内置连接", "cls": "acc"}, {"text": f"查询顺序 {order}"}]}
         doc.add_kv(
             "",
             [
@@ -518,9 +544,42 @@ class CnService:
                 ("检测方式", st.get("source")),
                 ("错误", st.get("error")),
                 ("WeGame 凭证", wg_state),
-                ("查询顺序", " → ".join("客户端" if s == "client" else "WeGame" for s in self.sources())),
+                ("查询顺序", order),
             ],
         )
         if not st.get("connected") and wg_state != "正常":
             doc.add_text("", REMOTE_HINT + "；或在「国服 → WeGame 凭证」填写 WeGame 登录凭证")
+        if self.wg.configured and wg_meta:
+            doc.add_kv("WeGame 凭证", wegame_rows(wg_meta, wg_state == "正常"))
+        doc.tip("/lol 绑定国服 名字#编号 艾欧尼亚", "绑定国服账号")
+        if wg_state != "正常":
+            doc.tip("/lol WeGame登录", "管理员扫码获取 WeGame 凭证")
+        doc.tip("/lol 战绩", "查看已绑定账号的最近对局")
         return View("cn_status", {**st, "wegame": wg_state}, doc, time.time())
+
+
+def _span(sec: float) -> str:
+    h = sec / 3600
+    return f"{h / 24:.1f} 天" if h >= 48 else (f"{h:.1f} 小时" if h >= 1 else f"{max(1, round(sec / 60))} 分钟")
+
+
+def _dt(ts: float | None) -> str | None:
+    return time.strftime("%m-%d %H:%M", time.localtime(ts)) if ts else None
+
+
+def wegame_rows(meta: dict, ok: bool) -> list[tuple[str, Any]]:
+    now = time.time()
+    login = meta.get("app")
+    if login and meta.get("nick"):
+        login = f"{login}（{meta['nick']}）"
+    life = list(meta.get("lifetimes") or [])
+    exp = meta.get("expires_at")
+    return [
+        ("登录方式", login or "手动填写"),
+        ("获取时间", _dt(meta.get("logged_at"))),
+        ("已使用", _span(now - meta["logged_at"]) if ok and meta.get("logged_at") else None),
+        ("服务器标注过期", (_dt(exp) + ("（已过）" if exp < now else "")) if exp else "未标注"),
+        ("上次确认有效", _dt(meta.get("last_ok"))),
+        ("以往有效时长", " / ".join(_span(x) for x in life[-3:]) if life else "暂无记录"),
+        ("过期后自动发二维码到", "上次扫码的会话" if meta.get("umo") else "未知（先扫码登录一次）"),
+    ]

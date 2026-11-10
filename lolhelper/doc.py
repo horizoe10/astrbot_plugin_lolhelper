@@ -44,6 +44,8 @@ class Section:
     team: dict = field(default_factory=dict)  # team panel of a match detail (image only)
     widths: list[str] = field(default_factory=list)  # fixed column widths (image), e.g. ["10%", "30%", ...]
     block: dict = field(default_factory=dict)  # structured data for runes / skills / iconrows (image only)
+    # image-only presentation hint: hide (shown by the banner instead) | flow (build path) | follow | matchup | medals | ranks
+    style: str = ""
 
 
 @dataclass
@@ -60,6 +62,14 @@ class Doc:
     accent: str = ""  # theme color override (e.g. per esports league)
     icon_logo: bool = False  # icon is a transparent logo: show whole, no cropping
     tips: list[dict] = field(default_factory=list)  # command hints shown at the bottom: {"cmd", "desc"}
+    # image-only banner, see templates/card.html. layout "profile" (default): art, icon, logo, level, name, tag, sub,
+    # chips [{text, cls, img}], side {kind: rank|big, ...}, stats [{v, u, k} | {parts} | {streak} | {icons}];
+    # "center": eyebrow, title, range, chips, art, podium, plus wide + slogo (TFT season banner and logo), vivid (brighter
+    # art), duo + arts [left, right] (two-sided split banner); "versus": esports scoreboard. Any layout but duel: wm, a logo
+    # shown as a large white watermark on a generated poster ("mark" = the plugin emblem), pc (poster tint of center).
+    # Profile and center banners without art get the plugin emblem poster. Empty = built from title / badges.
+    # Badges whose cls contains "hx" are shown by the banner elsewhere and left out of its chip row.
+    hero: dict = field(default_factory=dict)
 
     # builders -----------------------------------------------------------------
     def badge(self, text: str, cls: str = "", img: str | None = None) -> "Doc":
@@ -79,12 +89,14 @@ class Doc:
         return self
 
     def add_table(
-        self, title: str, headers: list[str], rows: list[list[Any]], note: str = "", widths: list[str] | None = None
+        self, title: str, headers: list[str], rows: list[list[Any]], note: str = "", widths: list[str] | None = None,
+        style: str = "",
     ) -> "Doc":
         cells = [[Cell.of(v) for v in r] for r in rows]
         if cells:
             self.sections.append(
-                Section(title=title, kind="table", headers=headers, rows=cells, note=note, total=len(cells), widths=list(widths or []))
+                Section(title=title, kind="table", headers=headers, rows=cells, note=note, total=len(cells), widths=list(widths or []),
+                        style=style)
             )
         return self
 
@@ -94,9 +106,9 @@ class Doc:
             self.sections.append(Section(title=title, kind="list", items=items, note=note, total=len(items)))
         return self
 
-    def add_tiles(self, title: str, tiles: list[Cell], note: str = "") -> "Doc":
+    def add_tiles(self, title: str, tiles: list[Cell], note: str = "", style: str = "") -> "Doc":
         if tiles:
-            self.sections.append(Section(title=title, kind="tiles", tiles=tiles, note=note))
+            self.sections.append(Section(title=title, kind="tiles", tiles=tiles, note=note, style=style))
         return self
 
     def add_text(self, title: str, text: str) -> "Doc":
@@ -114,10 +126,10 @@ class Doc:
         self.sections.append(Section(title="", kind="team", team=team, items=lines))
         return self
 
-    def add_block(self, title: str, kind: str, block: dict, lines: list[str], note: str = "") -> "Doc":
+    def add_block(self, title: str, kind: str, block: dict, lines: list[str], note: str = "", style: str = "") -> "Doc":
         """Image-only visual block; lines are what the text / Markdown renderers print."""
         if block and any(lines):
-            self.sections.append(Section(title=title, kind=kind, block=block, items=[x for x in lines if x], note=note))
+            self.sections.append(Section(title=title, kind=kind, block=block, items=[x for x in lines if x], note=note, style=style))
         return self
 
     def to_dict(self) -> dict[str, Any]:

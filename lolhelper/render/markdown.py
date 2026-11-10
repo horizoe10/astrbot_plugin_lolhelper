@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..doc import Cell, Doc, limited
+from .text import IMAGE_ONLY
 
 
 def _esc(s: str) -> str:
@@ -27,6 +28,8 @@ def render_markdown(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> s
         out.append("")
         out.append(" · ".join(f"**{b.text}**" for b in doc.badges))
     for s in doc.sections:
+        if s.kind in IMAGE_ONLY:
+            continue
         out.append("")
         if s.title:
             out.append(f"**{s.title}**")
@@ -46,7 +49,7 @@ def render_markdown(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> s
                 out.append(f"_共 {s.total} 条，仅显示前 {len(s.rows)} 条_")
         elif s.kind == "list":
             out.extend(f"- {i}" for i in s.items)
-        elif s.kind in ("cards", "runes", "skills", "iconrows", "versus", "series"):
+        elif s.kind in ("cards", "runes", "skills", "iconrows", "versus", "series", "ai", "form", "podium", "boards", "pk", "split"):
             out.extend(f"- {i}" for i in s.items)
         elif s.kind == "team" and s.items:
             out.append(f"**{s.items[0]}**")

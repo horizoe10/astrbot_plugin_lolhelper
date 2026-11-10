@@ -49,6 +49,22 @@ def parse_ptui(text: str) -> list[str]:
     return re.findall(r"'((?:[^'\\]|\\.)*)'", m.group(1)) if m else []
 
 
+def ticket_expiry(resp: aiohttp.ClientResponse) -> float | None:
+    """Expiry (unix time) WeGame sets on the tgp_ticket cookie, if any."""
+    m = resp.cookies.get("tgp_ticket")
+    if m is None:
+        return None
+    try:
+        if m["max-age"]:
+            return time.time() + int(m["max-age"])
+        if m["expires"]:
+            from email.utils import parsedate_to_datetime
+            return parsedate_to_datetime(m["expires"]).timestamp()
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
 def _cookies(resp: aiohttp.ClientResponse, into: dict[str, str]) -> None:
     for key, morsel in resp.cookies.items():
         if morsel.value:
@@ -63,6 +79,7 @@ class WeGameQrLogin:
         self.logger = logger or default_logger
         self.session: aiohttp.ClientSession | None = None
         self.nick = ""
+        self.info: dict = {}
         self._redirect = ""
         self._login_sig = ""
         self._qrsig = ""
@@ -159,11 +176,11 @@ class WeGameQrLogin:
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise BridgeError(f"换取 WeGame 凭证失败：{type(exc).__name__}") from exc
         return await exchange("login_by_qq", {"qq_info_type": 6, "uin": uin, "sig": skey}, self.timeout, self.logger,
-                              cookie=f"p_uin={got.get('p_uin', '')}; p_skey={skey}")
+                              cookie=f"p_uin={got.get('p_uin', '')}; p_skey={skey}", info=self.info)
 
 
 async def exchange(method: str, login_info: dict, timeout: aiohttp.ClientTimeout, logger: Any,
-                   cookie: str = "", referer: str = S_URL) -> str:
+                   cookie: str = "", referer: str = S_URL, info: dict | None = None) -> str:
     """Call WeGame login_by_qq / login_by_wechat and return "tgp_id=…; tgp_ticket=…"."""
     body = {"clienttype": "1000005", "mappid": "10001", "mcode": "", "config_params": {"lang_type": 0},
             "login_info": login_info}
@@ -176,6 +193,8 @@ async def exchange(method: str, login_info: dict, timeout: aiohttp.ClientTimeout
                                          timeout=timeout) as s:
             async with s.post(AUTH_API + method, json=body, headers=headers) as resp:
                 _cookies(resp, got)
+                if info is not None:
+                    info["expires_at"] = ticket_expiry(resp)
                 data = await resp.json(content_type=None)
     except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
         raise BridgeError(f"换取 WeGame 凭证失败：{type(exc).__name__}") from exc
@@ -199,6 +218,7 @@ class WeChatQrLogin:
         self.logger = logger or default_logger
         self.session: aiohttp.ClientSession | None = None
         self.nick = ""
+        self.info: dict = {}
         self._uuid = ""
         self._last = ""
         self._code = ""
@@ -266,5 +286,5 @@ class WeChatQrLogin:
         if not self._code:
             raise BridgeError("扫码登录未完成")
         return await exchange("login_by_wechat", {"wx_info_type": 1, "appid": WX_APPID, "code": self._code},
-                              self.timeout, self.logger, referer=WX_REDIRECT)
+                              self.timeout, self.logger, referer=WX_REDIRECT, info=self.info)
 

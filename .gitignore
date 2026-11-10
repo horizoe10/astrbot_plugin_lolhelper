@@ -4,4 +4,7 @@ __pycache__/
 .smoke/
 bridge/bridge.json
 .venv/
-
+.video-work/
+docs/video/out/
+docs/posters/
+docs/video/

@@ -28,3 +28,9 @@ def test_icons(gd):
     assert gd.champ_icon(gd.champion(157)).endswith("/16.22.1/img/champion/Yasuo.png")
     assert gd.item_icon(0) is None
 
+
+def test_tft_localize_comp_names(gd):
+    assert gd.tft_localize("日蚀骑士 Caitlyn") == "日蚀骑士 凯特琳"
+    assert gd.tft_localize("凯特琳 Caitlyn") == "凯特琳"  # the Chinese name is already there
+    assert gd.tft_localize("Brambleback 速升") == "Brambleback 速升"  # unknown words stay
+

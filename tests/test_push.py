@@ -82,6 +82,7 @@ def test_live_games_push_once_per_finished_game(tmp_path, gd):
         await store.load()
         await store.add_sub("g1", "esports", {"league": "worlds"})
         f = FakeFacade(gd, store)
+        f.s.push_esports_game_data = False  # score-only mode: one series card per game
         state = {"score": (1, 0), "games": [{"set": 1, "finished": True}, {"set": 2, "finished": False}]}
 
         class Esp:
@@ -121,5 +122,61 @@ def test_live_games_push_once_per_finished_game(tmp_path, gd):
         state.update(score=(3, 1), games=[{"set": i, "finished": True} for i in range(1, 5)])
         await pm.check_live_games(games, set(), targets, _t.time())
         assert len(sent) == 2  # series decided: left to the full result card
+
+    asyncio.run(run())
+
+
+def test_live_games_push_game_detail_cards(tmp_path, gd, monkeypatch):
+    """Per-game mode: a 10-player detail card per finished game; the decider is pushed with the result."""
+    import lolhelper.esports as esp_mod
+    from lolhelper.service import View
+
+    async def run():
+        store = StateStore(tmp_path / "s.json")
+        await store.load()
+        f = FakeFacade(gd, store)
+        home, away = {"id": "1", "acronym": "BLG"}, {"id": "2", "acronym": "DK"}
+
+        def game(n, winner):
+            return {"set": n, "finished": True, "players": [{}], "winner": {"id": winner}}
+
+        state = {"score": (1, 0), "games": [game(1, "1"), {"set": 2, "finished": False}]}
+
+        class Esp:
+            async def match(self, gid):
+                h, a = state["score"]
+                return {"id": gid, "status": "running", "homeScore": h, "awayScore": a, "numberOfGames": 5,
+                        "homeTeam": home, "awayTeam": away, "tournament": {"serie": {"league": {"shortName": "Worlds"}}}}
+
+        async def series_games(g):
+            return state["games"], 0
+
+        monkeypatch.setattr(esp_mod, "build_esports_game_view",
+                            lambda g, gm, gd_, tz, created, **kw: View("lol_esports_game", {}, Doc(title=f"game{gm['set']}")))
+        f.svc.esp = Esp()
+        f.svc.esports_series_games = series_games
+        sent = []
+
+        async def send(umo, view):
+            sent.append((view.doc.title, view.doc.badges[0].text))
+
+        pm = PushManager(f, send)
+        import time as _t
+        from datetime import datetime, timezone
+        start = datetime.fromtimestamp(_t.time() - 3600, timezone.utc).isoformat()
+        games = [{"id": 1, "league": "Worlds", "scheduledAt": start, "status": "RUNNING"}]
+        targets = lambda g: ["g1"]
+        await pm.check_live_games(games, set(), targets, _t.time())
+        assert sent == [("game1", "第1局结束 · 大比分 BLG 1:0 DK")]
+        await pm.check_live_games(games, set(), targets, _t.time())
+        assert len(sent) == 1
+        state.update(score=(1, 1), games=[game(1, "1"), game(2, "2")])
+        await pm.check_live_games(games, set(), targets, _t.time())
+        assert sent[-1] == ("game2", "第2局结束 · 大比分 BLG 1:1 DK")
+        # series ends 3:1 before games 3 and 4 were pushed live: both follow with the result
+        state.update(score=(3, 1), games=[game(1, "1"), game(2, "2"), game(3, "1"), game(4, "1")])
+        g = {"id": 1, "homeTeam": home, "awayTeam": away, "homeScore": 3, "awayScore": 1}
+        assert await pm.push_game_cards(g, ["g1"]) == 2
+        assert [x[1] for x in sent[-2:]] == ["第3局结束 · 大比分 BLG 2:1 DK", "第4局结束 · 大比分 BLG 3:1 DK"]
 
     asyncio.run(run())

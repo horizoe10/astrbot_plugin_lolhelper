@@ -29,6 +29,8 @@ def test_settings_cn_and_esports_migration():
     assert remote.cn_bridge_url == "http://127.0.0.1:6198"
     es = Settings.from_config({"esports": {"default_leagues": ["S赛", "LPL", "火星联赛"]}})
     assert es.esports_default_leagues == ["worlds", "lpl"]
+    posters = Settings.from_config({"esports": {"posters": "S赛=https://x/w.jpg\nLPL=https://x/l.jpg\nLCK=ftp://x/bad.jpg\n# 注释"}})
+    assert posters.esports_posters == {"worlds": "https://x/w.jpg", "lpl": "https://x/l.jpg"}
 
 
 def test_settings_parsing():

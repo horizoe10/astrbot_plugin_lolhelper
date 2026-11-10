@@ -243,3 +243,12 @@ TFT_TIER_PILL = {"OP": "op", "S": "tp t1", "A": "tp t2", "B": "tp t3", "C": "tp 
 def rank_cls(rank) -> str:
     return {1: "r1", 2: "r2", 3: "r3"}.get(int(rank)) if str(rank).isdigit() and int(rank) <= 3 else ""
 
+
+def score_cls(score) -> str:
+    """Colour tier of an OP.GG rating (0-10): op >= 9, hi >= 7, mid >= 4, low."""
+    try:
+        v = float(score)
+    except (TypeError, ValueError):
+        return "low"
+    return "op" if v >= 9 else "hi" if v >= 7 else "mid" if v >= 4 else "low"
+

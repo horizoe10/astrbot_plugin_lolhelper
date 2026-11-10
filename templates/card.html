@@ -3,443 +3,1049 @@
 <head>
 <meta charset="utf-8">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { background: {{ c.card }}; }
-  body {
-    background: {{ c.card }};
-    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
-    color: {{ c.text }};
-    width: {{ width }}px;
-    font-size: 15px;
-  }
-  .card { background: {{ c.card }}; overflow: hidden; }
-  .head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 3px solid {{ c.accent }};
-          background: linear-gradient(120deg, {{ c.accent }}33, transparent 70%); }
-  .head img { width: 64px; height: 64px; border-radius: 12px; border: 2px solid {{ c.accent }}; object-fit: cover; }
-  .head img.logo { object-fit: contain; padding: 8px; background: {{ c.accent }}1f; box-sizing: border-box; }
-  .head h1 { font-size: 24px; font-weight: 700; letter-spacing: .5px; }
-  .head .sub { color: {{ c.muted }}; margin-top: 4px; font-size: 14px; }
-  .badges { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px 0; }
-  .badge { padding: 4px 10px; border-radius: 999px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; font-size: 13px; }
-  .sec { padding: 14px 20px 4px; }
-  .sec h2 { font-size: 15px; color: {{ c.accent }}; margin-bottom: 10px; font-weight: 700; }
-  .sec h2::before { content: ""; display: inline-block; width: 4px; height: 14px; background: {{ c.accent }};
-                    border-radius: 2px; margin-right: 8px; vertical-align: -1px; }
-  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
-  .kv div { background: {{ c.card2 }}; border-radius: 10px; padding: 8px 12px; }
-  .kv span { display: block; color: {{ c.muted }}; font-size: 12px; margin-bottom: 2px; }
-  .kv b { font-size: 15px; font-weight: 600; word-break: break-all; }
-  .kv .wide { grid-column: span 2; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  table.fixed { table-layout: fixed; }
-  th { text-align: left; color: {{ c.muted }}; font-weight: 500; font-size: 12px; padding: 6px 6px; border-bottom: 1px solid {{ c.line }}; }
-  td { padding: 7px 6px; border-bottom: 1px solid {{ c.line }}; vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  td img { width: 28px; height: 28px; border-radius: 6px; vertical-align: middle; margin-right: 6px; object-fit: cover; }
-  td small, .tile small { display: block; color: {{ c.muted }}; font-size: 12px; margin-top: 2px; }
-  .win { color: #3fb27f; font-weight: 700; }
-  .lose { color: #e84057; font-weight: 700; }
-  .muted { color: {{ c.muted }}; }
-  .gold { color: #e0b252; font-weight: 700; }
-  .accent { color: {{ c.accent }}; font-weight: 700; }
-  .t0, .t1 { color: #e84057; font-weight: 700; }
-  .t2 { color: #5383e8; font-weight: 700; }
-  .t3 { color: #3fb27f; font-weight: 700; }
-  .t4 { color: #9aa4af; }
-  .t5 { color: #6b7280; }
-  td, .badge, .kv b { font-variant-numeric: tabular-nums; }
-  /* trend arrows, rate and KDA colouring */
-  .up { color: #3fb27f !important; font-weight: 700; }
-  .down { color: #e84057 !important; font-weight: 700; }
-  .hi { color: #3fb27f; font-weight: 700; }
-  .lo { color: #e84057; }
-  .kda5 { color: #ff8200 !important; font-weight: 700; }
-  .kda4 { color: #2f9bff !important; font-weight: 700; }
-  .kda3 { color: #00bba3 !important; font-weight: 700; }
-  .r1 { color: #f5c451; font-weight: 800; }
-  .r2 { color: #cfd6e4; font-weight: 800; }
-  .r3 { color: #d39a6a; font-weight: 800; }
-  td small.inl { display: inline; margin-left: 6px; font-size: 12px; }
-  /* tier pills */
-  .pill { display: inline-block; min-width: 38px; text-align: center; padding: 2px 9px; border-radius: 999px;
-          font-weight: 800; font-size: 13px; letter-spacing: .5px; line-height: 18px; }
-  .pill.t0, .pill.t1, .badge.tp.t1 { background: rgba(232,64,87,.16); color: #ff6b81; border: 1px solid rgba(232,64,87,.45); }
-  .pill.t2, .badge.tp.t2 { background: rgba(83,131,232,.16); color: #7ea2ff; border: 1px solid rgba(83,131,232,.45); }
-  .pill.t3, .badge.tp.t3 { background: rgba(63,178,127,.16); color: #4fd39a; border: 1px solid rgba(63,178,127,.45); }
-  .pill.t4, .badge.tp.t4 { background: rgba(154,164,175,.14); color: #b3bcc7; border: 1px solid rgba(154,164,175,.35); }
-  .pill.t5, .badge.tp.t5 { background: rgba(107,114,128,.14); color: #8b93a1; border: 1px solid rgba(107,114,128,.35); }
-  /* OP: white -> blue -> purple shimmer */
-  .pill.op, .badge.op {
-    position: relative; overflow: hidden; color: #1b1340; border: none; font-weight: 900;
-    background: linear-gradient(115deg, #ffffff 0%, #a9dcff 20%, #5b8cff 45%, #8b5cf6 70%, #d7b8ff 88%, #ffffff 100%);
-    box-shadow: 0 0 12px rgba(139,92,246,.6), inset 0 0 0 1px rgba(255,255,255,.65);
-    text-shadow: 0 1px 0 rgba(255,255,255,.55);
-  }
-  .pill.op::after, .badge.op::after {
-    content: ""; position: absolute; top: -60%; left: 64%; width: 18%; height: 220%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); transform: rotate(22deg);
-  }
-  tr.rwin td { background: rgba(63,178,127,.08); }
-  tr.rlose td { background: rgba(232,64,87,.08); }
-  tr.rwin td:first-child { box-shadow: inset 3px 0 0 #3fb27f; }
-  tr.rlose td:first-child { box-shadow: inset 3px 0 0 #e84057; }
-  .strip { margin-top: 4px; white-space: nowrap; }
-  .strip img { width: 20px !important; height: 20px !important; border-radius: 4px !important; margin-right: 2px !important; }
-  .strip img.core { box-shadow: 0 0 0 2px #e0b252; }
-  .strip img.spell { border-radius: 50% !important; }
-  .strip img.spell + img:not(.spell) { margin-left: 6px !important; }
-  td.bigstrip .strip { margin-top: 0; white-space: normal; }
-  td.bigstrip .strip img { width: 36px !important; height: 36px !important; border-radius: 8px !important; margin: 0 4px 4px 0 !important; }
-  td.iconsonly .strip img { width: 26px !important; height: 26px !important; border-radius: 6px !important; }
-  tr.rme td { background: rgba(83,131,232,.18) !important; }
-  tr.rme td:first-child { box-shadow: inset 3px 0 0 {{ c.accent }}; }
-  td .player { display: block; font-size: 12px; color: {{ c.muted }}; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* tiles: unit items, traits, rank emblems */
-  .tile { width: 92px; }
-  .tile .strip { margin-top: 3px; text-align: center; white-space: nowrap; }
-  .tile .strip img { display: inline-block !important; width: 22px !important; height: 22px !important; margin: 0 1px !important; border-radius: 4px !important; }
-  .tile.gold > img { border: 2px solid #e0b252; }
-  .tile.trait { width: 74px; }
-  .tile.trait > img { width: 40px; height: 40px; padding: 6px; border-radius: 50%; border: none; background: #4a5568; }
-  .tile.trait.s1 > img { background: linear-gradient(135deg, #a8693f, #6e4022); }
-  .tile.trait.s2 > img { background: linear-gradient(135deg, #b7c4d1, #6d7b89); }
-  .tile.trait.s3 > img { background: linear-gradient(135deg, #f3cf6b, #b07d1e); }
-  .tile.trait.s4 > img, .tile.trait.s5 > img, .tile.trait.s6 > img {
-    background: linear-gradient(135deg, #ffffff, #a9dcff 30%, #8b5cf6 65%, #f0c6ff); box-shadow: 0 0 8px rgba(139,92,246,.6); }
-  .tile.rank { width: auto; min-width: 210px; display: flex; align-items: center; gap: 12px; text-align: left;
-               background: {{ c.card2 }}; border-radius: 12px; padding: 8px 14px 8px 8px; font-size: 14px; }
-  .tile.rank > img { width: 64px; height: 64px; border: none; margin: 0; border-radius: 0; object-fit: contain; }
-  .tile.rank span { font-weight: 800; font-size: 15px; }
-  /* ARAM Mayhem augments, framed by in-game rarity */
-  .tile.aug { width: 100px; }
-  .tile.aug > img { width: 52px; height: 52px; padding: 4px; border-radius: 12px; background: #0e0e10; border: 2px solid #5b6474; }
-  .tile.aug-silver > img { border-color: #b7c4d1; }
-  .tile.aug-gold > img { border-color: #e0b252; box-shadow: 0 0 8px rgba(224,178,82,.35); }
-  .tile.aug-prismatic > img { border: 2px solid transparent; box-shadow: 0 0 10px rgba(139,92,246,.55);
-    background: linear-gradient(#0e0e10, #0e0e10) padding-box, linear-gradient(135deg, #ffffff, #a9dcff, #8b5cf6, #f0c6ff) border-box; }
-  .tiles { display: flex; flex-wrap: wrap; gap: 10px; }
-  .tile { width: 82px; text-align: center; font-size: 12px; }
-  .tile img { width: 48px; height: 48px; border-radius: 10px; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 4px; object-fit: cover; }
-  .tile .ph { width: 48px; height: 48px; border-radius: 10px; background: {{ c.card2 }}; margin: 0 auto 4px; display: flex;
-              align-items: center; justify-content: center; color: {{ c.muted }}; font-size: 18px; }
-  ul { padding-left: 18px; line-height: 1.7; }
-  .text { white-space: pre-wrap; line-height: 1.7; }
-  .note { color: {{ c.muted }}; font-size: 12px; margin-top: 8px; }
-  .foot { padding: 12px 20px 16px; color: {{ c.muted }}; font-size: 12px; display: flex; justify-content: space-between; }
+{% for f in fonts %}@font-face { font-family: "BC"; font-weight: {{ f.w }}; font-style: {{ f.s }}; src: url(data:font/woff2;base64,{{ f.b64 }}) format("woff2"); }
+{% endfor %}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --acc: {{ c.acc }}; --acc-t: {{ c.acc_t }}; --acc-s: {{ c.acc_s }}; --acc-g: {{ c.acc_g }};
+  --bg: {{ c.bg }}; --panel: {{ c.panel }}; --panel2: {{ c.panel2 }}; --line: {{ c.line }}; --edge: {{ c.edge }};
+  --text: {{ c.text }}; --soft: {{ c.soft }}; --muted: {{ c.muted }}; --dim: {{ c.dim }};
+  --fill: {{ c.fill }}; --fill2: {{ c.fill2 }}; --slot: {{ c.slot }}; --kbd: {{ c.kbd }};
+  --win: {{ c.win }}; --lose: {{ c.lose }}; --gold: {{ c.gold }}; --wint: {{ c.wint }}; --loset: {{ c.loset }}; --goldt: {{ c.goldt }}; --dt: {{ c.dt }};
+  --r1: {{ c.r1 }}; --r2: {{ c.r2 }}; --r3: {{ c.r3 }}; --scb: {{ c.scb }}; --scf: {{ c.scf }};
+  --pw: {{ c.panel_win }}; --pl: {{ c.panel_lose }}; --pm: {{ c.panel_me }};
+  --blue: {{ c.blue }}; --red: {{ c.red }}; --vio: #8a63ff;
+  --zh: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+}
+.dk { --bg: #14161a; --panel: #23262c; --panel2: #1a1d21; --line: rgba(255,255,255,.08); --edge: transparent; --kbd: #15171b;
+  --text: #f2f4f7; --soft: #c6cbd2; --muted: #8e96a3; --dim: #69717c; --fill: rgba(255,255,255,.09); --fill2: rgba(255,255,255,.15);
+  --slot: rgba(0,0,0,.35); --win: #3fd18a; --lose: #f0606e; --gold: #ffcc4d; --wint: #4fe0a0; --loset: #ff8a95; --goldt: #ffcc4d; --dt: #f07c86;
+  --r1: #f5cf6b; --r2: #d6dde6; --r3: #e2a476; --scb: #e6e9ee; --scf: #16181c; color: var(--text); }
+html, body { background: var(--bg); }
+body { width: {{ width }}px; color: var(--text); font-family: var(--zh); font-size: 14px; line-height: 1.4; }
+img { display: block; }
+.n, .ni { font-family: "BC", var(--zh); font-variant-numeric: tabular-nums; font-weight: 700; }
+.ni { font-style: italic; }
+.zh { font-family: var(--zh); }
+.win, .hi, .up { color: var(--wint); font-weight: 700; }
+.lose, .lo, .down { color: var(--loset); font-weight: 700; }
+.vt.win, .vsr-t.win, .sg-side.win { color: var(--text); }
+.gold { color: var(--goldt); font-weight: 700; }
+.accent { color: var(--acc); font-weight: 700; }
+.muted { color: var(--muted); }
+.kda5 { color: var(--goldt) !important; font-weight: 800; }
+.kda4, .kda3 { color: var(--text) !important; font-weight: 800; }
+.r1 { color: var(--r1) !important; font-weight: 800; } .r2 { color: var(--r2) !important; font-weight: 800; } .r3 { color: var(--r3) !important; font-weight: 800; }
 
-  /* ---------- match list cards (League Akari style) ---------- */
-  .mc { display: grid; grid-template-columns: 56px 46px 1fr 240px; gap: 10px; align-items: center; padding: 10px 12px;
-        border-radius: 10px; margin-bottom: 8px; border-left: 4px solid {{ c.muted }}; background: {{ c.card2 }}; }
-  .mc.mc-win { background: rgba(63,178,127,.14); border-left-color: #3fb27f; }
-  .mc.mc-lose { background: rgba(232,64,87,.15); border-left-color: #e84057; }
-  .mc-champ { position: relative; text-align: center; }
-  .mc-champ img { width: 52px; height: 52px; border-radius: 10px; display: block; }
-  .lv { position: absolute; left: 34px; top: 36px; background: #0e0e10; color: #fff; font-size: 11px; line-height: 15px;
-        border-radius: 6px; padding: 0 4px; border: 1px solid {{ c.line }}; }
-  .mc-champ .res { display: block; margin-top: 6px; font-size: 14px; font-weight: 800; }
-  .mc-win .res { color: #3fd18a; } .mc-lose .res { color: #ff5a6e; } .mc-remake .res { color: {{ c.muted }}; }
-  .sr { display: grid; grid-template-columns: 21px 21px; gap: 3px; }
-  .sr img, .sr i { width: 21px; height: 21px; border-radius: 5px; background: #0e0e10; display: block; }
-  .mc-stats { display: flex; gap: 24px; align-items: flex-end; }
-  .mc-stats b { font-size: 19px; font-weight: 800; }
-  .mc-stats small, .mc-foot { display: block; color: {{ c.muted }}; font-size: 12px; }
-  .mc-kda .d { color: #ff5a6e; }
-  .mc-items { margin-top: 7px; display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
-  .mc-items img, .mc-items i, .trow-items img, .trow-items i { width: 22px; height: 22px; border-radius: 5px; background: rgba(0,0,0,.35); display: block; }
-  .mc-items i:nth-child(7), .mc-items img:nth-child(7) { margin-right: 6px; border-radius: 50%; }
-  .tagp { padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; line-height: 18px; }
-  .tag-blue { background: #2f6fde; } .tag-purple { background: #8b3fd9; } .tag-green { background: #1f9d6b; }
-  .tag-orange { background: #d9822b; } .tag-gray { background: #5b6474; } .tag-red { background: #d63a50; }
-  .tag-mvp { background: linear-gradient(90deg, #f7d26b, #e09a2b); color: #2a1a00; }
-  .tag-ace { background: linear-gradient(90deg, #c3b5ff, #7b5cf0); }
-  .mc-foot { margin-top: 6px; }
-  .mc-pl { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 12px; }
-  .mc-pl div { display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; }
-  .mc-pl img { width: 17px; height: 17px; border-radius: 4px; flex: none; }
-  .mc-pl span { overflow: hidden; text-overflow: ellipsis; color: {{ c.muted }}; }
-  .mc-pl .me span { font-weight: 800; color: {{ c.text }}; }
-  /* ---------- team panels of a match detail ---------- */
-  .tm { border-radius: 12px; overflow: hidden; margin-bottom: 12px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; }
-  .tm-head { display: flex; align-items: center; gap: 16px; padding: 9px 12px; font-size: 14px; }
-  .tm-win .tm-head { background: rgba(63,178,127,.18); } .tm-lose .tm-head { background: rgba(232,64,87,.2); }
-  .tm-head b { font-size: 15px; } .tm-win .tm-head b { color: #3fd18a; } .tm-lose .tm-head b { color: #ff5a6e; }
-  .tm-head .obj { color: {{ c.muted }}; font-size: 13px; }
-  .tm-head .bans { margin-left: auto; display: flex; gap: 3px; align-items: center; color: {{ c.muted }}; font-size: 12px; }
-  .tm-head .bans img { width: 20px; height: 20px; border-radius: 4px; filter: grayscale(.7); }
-  .trow { display: grid; grid-template-columns: 40px 46px 176px 92px 106px 64px 66px 1fr; gap: 8px; align-items: center;
-        padding: 6px 12px; border-top: 1px solid {{ c.line }}; font-size: 13px; }
-  .trow.me { background: rgba(83,131,232,.18); box-shadow: inset 3px 0 0 {{ c.accent }}; }
-  .trow-champ { position: relative; }
-  .trow-champ img { width: 36px; height: 36px; border-radius: 50%; display: block; }
-  .trow-champ .lv { left: 22px; top: 22px; }
-  .trow .nm b { display: block; max-width: 176px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-  .trow.me .nm b { font-weight: 800; }
-  .trow small { display: block; color: {{ c.muted }}; font-size: 11px; white-space: nowrap; }
-  .bar span { font-size: 12px; }
-  .bar .track { height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; margin: 2px 0 3px; overflow: hidden; }
-  .bar .track i { display: block; height: 100%; border-radius: 3px; }
-  .bar .o { background: #e8743b; } .bar .b { background: #4a90e2; }
-  .trow-items { display: flex; gap: 2px; }
-  .trow-items img, .trow-items i { width: 20px; height: 20px; }
-  .trow .nm small { overflow: visible; white-space: normal; line-height: 18px; }
-  .tagp.mini { display: inline-block; font-size: 10px; line-height: 14px; padding: 0 5px; margin: 2px 0 0 4px; vertical-align: 1px; }
-  .tm-head .bans i.noban { width: 20px; height: 20px; border-radius: 4px; display: inline-block; background: rgba(255,255,255,.06); border: 1px dashed rgba(255,255,255,.18); }
+/* ---------- banner: always dark, art fading in from the right, straight accent edge ---------- */
+.hero { position: relative; overflow: hidden; padding: 26px 28px 0; border-bottom: 3px solid var(--acc);
+  background: radial-gradient(55% 150% at 0% 0%, var(--acc-g), transparent 62%), #14161a; }
+.hero.flat { padding-bottom: 26px; }
+.hero.esp { border-bottom-width: 4px; background: repeating-linear-gradient(104deg, rgba(255,255,255,.03) 0 2px, transparent 2px 10px),
+  radial-gradient(60% 160% at 0% 0%, var(--acc-g), transparent 62%), radial-gradient(45% 130% at 100% 100%, var(--acc-s), transparent 70%), #121418; }
+.hero > .art { position: absolute; right: 0; top: 0; width: 66%; height: 100%; object-fit: cover; object-position: 50% 20%; opacity: .6;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, rgba(0,0,0,.8) 45%, #000 75%); mask-image: linear-gradient(90deg, transparent 0, rgba(0,0,0,.8) 45%, #000 75%); }
+.hero::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 55%; background: linear-gradient(0deg, rgba(20,22,26,.94), transparent); }
+.hero.flat::after { height: 35%; opacity: .6; }
+.hero > :not(.art):not(.wm) { position: relative; z-index: 1; }
+/* generated poster: accent glow, fine diagonal lines, two light streaks and a large white watermark (league logo or the plugin emblem) */
+.hero.poster { background: radial-gradient(55% 160% at 84% -10%, var(--acc-t), transparent 70%), radial-gradient(60% 160% at 0% 0%, var(--acc-g), transparent 62%),
+  repeating-linear-gradient(104deg, rgba(255,255,255,.035) 0 1px, transparent 1px 12px), linear-gradient(180deg, #16191e, #0c0e11); }
+.hero.poster::before { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 52%, rgba(255,255,255,.06) 60%, transparent 61.5%, transparent 68%, rgba(255,255,255,.045) 71%, transparent 72.5%); }
+.hero > .wm { position: absolute; right: 30px; top: 50%; width: 330px; height: 330px; object-fit: contain; transform: translateY(-50%) rotate(-10deg);
+  opacity: .15; filter: brightness(0) invert(1); }
+/* a status block on the right stands in front of the watermark, the mark showing around it */
+.hero.sided > .wm { right: -50px; width: 300px; height: 300px; opacity: .13; }
+.hero.sided.poster .bigb, .hero.sided.poster .rk { background: rgba(10,12,15,.88); }
+.hrow { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.who { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.who > div:last-child { min-width: 0; }
+.avb { position: relative; flex: none; }
+.avw { padding: 2px; background: linear-gradient(160deg, var(--acc), rgba(255,255,255,.4) 50%, var(--acc));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%); }
+.av { width: 92px; height: 92px; object-fit: cover; background: #0d0f12;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%); }
+.av.logo { object-fit: contain; padding: 14px; background: radial-gradient(circle at 50% 40%, #2c323c, #0c0e11 76%); }
+.lvl { position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); padding: 0 8px; line-height: 20px; font-size: 14px;
+  background: #0d0f12; border: 1px solid var(--acc-t); color: #e8eaed; white-space: nowrap; }
+.nm { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; min-width: 0; }
+.nm b { display: block; min-width: 0; font-weight: 800; line-height: 1.1; letter-spacing: .5px; overflow: hidden; text-overflow: ellipsis; }
+.nm b.zh { font-weight: 900; letter-spacing: 3px; }
+.nm .tag { flex: none; font-size: 24px; color: var(--muted); font-weight: 600; }
+.nm .tag.zh { font-size: 21px; font-weight: 700; letter-spacing: 1px; }
+.hsub { margin-top: 6px; font-size: 14px; color: var(--soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.cp { display: inline-flex; align-items: center; gap: 5px; height: 25px; padding: 0 10px; border-radius: 4px; font-size: 13px; font-weight: 700;
+  background: var(--fill); color: var(--soft); white-space: nowrap; }
+.cp img { width: 17px; height: 17px; object-fit: contain; }
+.cp.acc, .cp.accent { background: var(--acc-s); color: var(--text); box-shadow: inset 0 0 0 1px var(--acc-t); }
+.cp.win, .cp.hi { background: rgba(63,209,138,.16); color: var(--wint); }
+.cp.lose, .cp.lo { background: rgba(240,96,110,.16); color: var(--loset); }
+.cp.gold { background: rgba(255,204,77,.15); color: var(--goldt); }
+.cp.muted { color: var(--muted); }
+.cp.op, .pill.op { color: #1a1033; background: linear-gradient(115deg, #ffffff 0%, #a9dcff 22%, #5b8cff 48%, #8b5cf6 72%, #d7b8ff 90%, #ffffff 100%); }
+.cp.t0, .cp.t1, .pill.t0, .pill.t1 { background: rgba(255,90,110,.18); color: #ff6b81; }
+.cp.t2, .pill.t2 { background: rgba(83,131,232,.2); color: #7ea2ff; }
+.cp.t3, .pill.t3 { background: rgba(63,178,127,.18); color: #4fd39a; }
+.cp.t4, .pill.t4 { background: rgba(154,164,175,.16); color: #b3bcc7; }
+.cp.t5, .pill.t5 { background: rgba(107,114,128,.16); color: #8b93a1; }
+.pill.ag-s { background: rgba(200,208,218,.16); color: #d3dae3; } .pill.ag-g { background: rgba(224,178,82,.2); color: #f0c463; }
+.pill.ag-p { color: #1a1033; background: linear-gradient(115deg, #ffe3f6, #b9e8ff 35%, #cdb8ff 65%, #fff2c2); }
+/* ranked block */
+.rk { flex: none; display: flex; align-items: center; gap: 14px; padding: 12px 20px 12px 12px; background: rgba(8,10,13,.6); border: 1px solid rgba(255,255,255,.08); }
+.rk > img { width: 88px; height: 88px; object-fit: contain; }
+.rk small { display: block; font-size: 12px; color: var(--muted); }
+.rk .tier { display: block; font-size: 21px; font-weight: 900; letter-spacing: 1px; margin-top: 1px; white-space: nowrap; }
+.rk .lp { display: block; font-size: 30px; line-height: 1.05; }
+.rk .lp em { font-style: normal; font-size: 15px; color: var(--muted); margin-left: 3px; }
+.rk .wl { display: block; font-size: 12px; color: var(--soft); margin-top: 2px; white-space: nowrap; }
+.rk .bar { height: 4px; background: rgba(255,255,255,.1); margin-top: 6px; width: 180px; }
+.rk .bar i { display: block; height: 100%; background: var(--win); }
+.rk .alt { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; color: var(--soft); white-space: nowrap; }
+.rk .alt img { width: 22px; height: 22px; object-fit: contain; }
+/* big value block: tier letter, match result */
+.bigb { flex: none; text-align: center; min-width: 128px; padding: 10px 18px 12px; background: rgba(8,10,13,.6); border: 1px solid rgba(255,255,255,.08); }
+.bigb small { display: block; font-size: 12px; color: var(--muted); letter-spacing: 2px; white-space: nowrap; }
+.bigb b { display: block; font-size: 60px; line-height: .95; font-weight: 800; margin: 2px 0; white-space: nowrap; }
+.bigb b.zh { font-size: 38px; line-height: 1.3; font-weight: 900; letter-spacing: 4px; padding-left: 4px; margin: 0; }
+.bigb span { display: block; font-size: 12.5px; color: var(--soft); white-space: nowrap; }
+.bigb.win b { color: var(--wint); } .bigb.lose b { color: var(--loset); } .bigb.remake b { color: var(--muted); } .bigb.gold b { color: var(--gold); }
+.bigb.u1 b { color: #b4bcc5; } .bigb.u2 b { color: #3fd18a; } .bigb.u3 b { color: #58a6ff; } .bigb.u4 b { color: #d27bff; } .bigb.u5 b { color: #f5c04f; }
+.bigb.t0 b, .bigb.t1 b { color: #ff6b81; } .bigb.t2 b { color: #7ea2ff; } .bigb.t3 b { color: #4fd39a; } .bigb.t4 b { color: #b3bcc7; } .bigb.t5 b { color: #8b93a1; }
+.bigb.op b { background: linear-gradient(115deg, #ffffff, #a9dcff 30%, #8b5cf6 70%, #d7b8ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* stat strip anchored on the banner's bottom edge */
+.ss { display: flex; width: max-content; max-width: 100%; margin-top: 22px; background: rgba(8,10,13,.86); border-top: 2px solid var(--acc); }
+.ss > div { position: relative; padding: 8px 20px 10px; }
+.ss > div + div::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 1px; background: rgba(255,255,255,.12); }
+.ss b { display: block; font-size: 27px; line-height: 1.05; white-space: nowrap; }
+.ss b em { font-style: normal; font-family: var(--zh); font-size: 14px; font-weight: 700; color: var(--muted); margin: 0 4px 0 2px; }
+.ss b i { font-style: normal; color: #6b727d; margin: 0 2px; font-size: 21px; }
+.ss b .d { color: var(--dt); }
+.ss b.win { color: var(--wint); } .ss b.lose { color: var(--loset); } .ss b.gold { color: var(--gold); }
+.ss small { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.streak { display: flex; gap: 4px; margin-top: 3px; }
+.streak i { width: 23px; height: 23px; font-style: normal; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; border-radius: 3px; }
+.streak i.w { background: rgba(63,209,138,.22); color: var(--wint); } .streak i.l { background: rgba(240,96,110,.22); color: var(--loset); } .streak i.r { background: var(--fill); color: var(--muted); }
+.mains { display: flex; gap: 4px; margin-top: 3px; }
+.mains img { width: 23px; height: 23px; border-radius: 3px; }
 
-  /* ---------- rune page ---------- */
-  .rp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .rp-tree { background: {{ c.card2 }}; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; }
-  .rp-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px; }
-  .rp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .rp-head img { width: 26px; height: 26px; }
-  .rp-head b { font-size: 15px; }
-  .rp-head span { margin-left: auto; color: {{ c.muted }}; font-size: 12px; }
-  .rp-key { display: flex; align-items: center; justify-content: center; gap: 10px; }
-  .rp-key img { width: 58px; height: 58px; border-radius: 50%; background: #0e0e10; box-shadow: 0 0 0 2px #c8aa6e; padding: 3px; }
-  .rp-key span { font-size: 16px; font-weight: 800; color: #f0e6d2; }
-  .rp-row { display: flex; justify-content: space-evenly; gap: 8px; }
-  .rp-r { width: 72px; text-align: center; font-size: 12px; }
-  .rp-r img { width: 38px; height: 38px; border-radius: 50%; background: #0e0e10; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 4px; }
-  .rp-shards { display: flex; justify-content: space-evenly; padding-top: 10px; border-top: 1px dashed {{ c.line }}; }
-  .rp-s { width: 64px; text-align: center; font-size: 11px; color: {{ c.muted }}; }
-  .rp-s img { width: 26px; height: 26px; border-radius: 50%; background: #0e0e10; border: 1px solid {{ c.line }}; display: block; margin: 0 auto 3px; padding: 2px; }
-  /* ---------- skills ---------- */
-  .sk-top { display: flex; gap: 28px; align-items: center; margin-bottom: 12px; }
-  .sk-top .lbl { color: {{ c.muted }}; font-size: 12px; margin-right: 8px; }
-  .sk-top small { color: {{ c.muted }}; font-size: 12px; margin-left: 8px; }
-  .sk-sp, .sk-max { display: flex; align-items: center; }
-  .sk-sp img { width: 36px; height: 36px; border-radius: 8px; margin-right: 6px; }
-  .sk-k { position: relative; display: inline-block; }
-  .sk-k img { width: 36px; height: 36px; border-radius: 8px; display: block; }
-  .sk-k b { position: absolute; right: -4px; bottom: -4px; font-size: 11px; line-height: 15px; padding: 0 4px; border-radius: 5px; background: #0e0e10; border: 1px solid {{ c.line }}; }
-  .sk-max .arr { font-style: normal; color: {{ c.muted }}; font-size: 20px; margin: 0 8px; }
-  .sk-grid { display: grid; gap: 3px; align-items: center; }
-  .sk-lbl { display: flex; align-items: center; gap: 4px; }
-  .sk-lbl img { width: 22px; height: 22px; border-radius: 5px; }
-  .sk-lbl b { font-size: 12px; color: {{ c.muted }}; }
-  .sk-c { height: 22px; border-radius: 4px; background: rgba(255,255,255,.05); font-size: 11px; font-weight: 800; text-align: center; line-height: 22px; color: #0e0e10; }
-  .sk-c.k-Q { background: #4f8ef7; } .sk-c.k-W { background: #3fb27f; } .sk-c.k-E { background: #e8913b; } .sk-c.k-R { background: #e0b252; }
-  /* ---------- icon rows (later items) ---------- */
-  .ir { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid {{ c.line }}; }
-  .ir:last-child { border-bottom: none; }
-  .ir-l { width: 56px; color: {{ c.muted }}; font-size: 13px; }
-  .ir-i { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-  .ir-i > div { min-width: 0; }
-  .ir-i b { overflow: hidden; display: -webkit-box !important; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; line-height: 1.25; }
-  .ir-i img { width: 34px; height: 34px; border-radius: 7px; }
-  .ir-i b { display: block; font-size: 13px; font-weight: 600; }
-  .ir-i small { color: {{ c.muted }}; font-size: 11px; white-space: nowrap; }
-  .ir-i small.win { color: #3fd18a; font-weight: 700; } .ir-i small.lose { color: #ff5a6e; font-weight: 700; }
-  /* ---------- esports versus ---------- */
-  td.vs-home, td.vs-away { font-weight: 800; }
-  td.vs-away img { float: right; margin: 0 0 0 6px; }
-  td.vs-away { text-align: right; }
-  td.logo img { object-fit: contain; border-radius: 0; background: transparent; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.12)); }
-  .vs { display: grid; grid-template-columns: 1fr 150px 1fr; align-items: center; gap: 10px; padding: 12px 16px 14px; margin-bottom: 8px; border-radius: 12px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; }
-  .vs-top { grid-column: 1 / 4; text-align: center; font-size: 12px; color: {{ c.muted }}; letter-spacing: .5px; }
-  .vs-top b { color: {{ c.text }}; font-weight: 600; margin: 0 6px; }
-  .vs-t { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .vs-t.h { justify-content: flex-end; text-align: right; }
-  .vs-t.a { justify-content: flex-start; text-align: left; }
-  .vs-logo { width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; }
-  .vs-logo img { max-width: 44px; max-height: 44px; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)) drop-shadow(0 0 3px rgba(255,255,255,.12)); }
-  .vs-n { font-size: 20px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vs-t.win .vs-n { color: #3fd18a; }
-  .vs-t.lose { opacity: .55; }
-  .vs-t.lose .vs-n { color: {{ c.muted }}; }
-  .vs-m { text-align: center; }
-  .vs-s { display: inline-block; min-width: 96px; padding: 4px 12px; border-radius: 999px; font-size: 24px; font-weight: 800; letter-spacing: 2px; background: {{ c.card }}; border: 1px solid {{ c.line }}; }
-  .vs-s.live { color: #ff5d5d; border-color: #ff5d5d; }
-  .vs-s.todo { color: {{ c.muted }}; font-size: 18px; }
-  .vs-sub { margin-top: 4px; font-size: 12px; color: {{ c.muted }}; }
-  .vs-sub .live { color: #ff5d5d; font-weight: 700; }
-  .vs-lg { display: inline-flex; align-items: center; gap: 4px; vertical-align: -3px; }
-  .vs-lg img { width: auto; height: 18px; max-width: 46px; object-fit: contain; }
-  .vs-no { display: inline-block; margin-right: 8px; padding: 0 7px; border-radius: 6px; background: {{ c.card }}; border: 1px solid {{ c.line }}; color: {{ c.text }}; font-weight: 700; }
-  .ob { display: inline-flex; align-items: center; gap: 3px; margin-right: 8px; white-space: nowrap; }
-  .ob img { width: 16px; height: 16px; object-fit: contain; }
-  .ob b { color: {{ c.text }}; font-weight: 700; }
-  .tm-head .obj b { font-size: 13px; }
-  .tm-head img.tm-logo { width: 26px; height: 26px; object-fit: contain; filter: drop-shadow(0 0 1px rgba(255,255,255,.55)); }
-  .sg { padding: 10px 14px 9px; margin-bottom: 8px; border-radius: 12px; background: {{ c.card2 }}; border: 1px solid {{ c.line }}; }
-  .sg-row { display: grid; grid-template-columns: 1fr 108px 1fr; align-items: center; gap: 8px; }
-  .sg-side { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .sg-side.h { justify-content: flex-end; }
-  .sg-k { font-size: 30px; font-weight: 800; min-width: 40px; text-align: center; color: {{ c.muted }}; }
-  .sg-side.win .sg-k { color: #3fd18a; }
-  .sg-ch { display: flex; gap: 4px; }
-  .sg-c { width: 50px; text-align: center; position: relative; }
-  .sg-c img { width: 42px; height: 42px; border-radius: 8px; border: 2px solid transparent; display: block; margin: 0 auto; }
-  .sg-side.lose .sg-c img { filter: grayscale(.55) brightness(.8); }
-  .sg-c.mvp img { border-color: #e0b252; }
-  .sg-c small { display: block; font-size: 10.5px; color: {{ c.muted }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .sg-c.mvp small { color: #e0b252; font-weight: 700; }
-  .sg-m { text-align: center; }
-  .sg-m b { display: block; font-size: 15px; }
-  .sg-m span { font-size: 12px; color: {{ c.muted }}; }
-  .sg-m .live { color: #ff5d5d; font-weight: 700; }
-  .sg-foot { display: grid; grid-template-columns: 1fr 180px 1fr; gap: 8px; margin-top: 6px; font-size: 12px; color: {{ c.muted }}; align-items: center; }
-  .sg-foot .h { text-align: right; } .sg-foot .a { text-align: left; }
-  .sg-tag { display: inline-block; padding: 0 6px; border-radius: 5px; font-size: 11px; margin: 0 6px; }
-  .sg-tag.blue { background: rgba(66,135,245,.2); color: #7fb0ff; } .sg-tag.red { background: rgba(232,64,87,.2); color: #ff7d8e; }
-  .sg-mvp { text-align: center; white-space: nowrap; }
-  .sg-mvp img { width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; margin-right: 4px; }
-  .sg-mvp b { color: #e0b252; margin-right: 4px; }.badge img { width: 18px; height: 18px; object-fit: contain; vertical-align: -4px; margin-right: 5px; }
-  .badge.scope { background: {{ c.accent }}1f; border-color: {{ c.accent }}66; font-weight: 600; }
-  .tips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 20px 0; padding: 10px 12px; border-radius: 12px; background: {{ c.card2 }}; border: 1px dashed {{ c.line }}; }
-  .tips-l { font-weight: 800; color: {{ c.accent }}; margin-right: 2px; font-size: 13px; }
-  .tip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: {{ c.card }}; border: 1px solid {{ c.line }}; font-size: 13px; }
-  .tip code { font-family: inherit; padding: 2px 9px; border-radius: 999px; background: {{ c.accent }}2e; color: {{ c.text }}; font-weight: 700; white-space: nowrap; }
-  .tip small { color: {{ c.muted }}; font-size: 12px; }
+/* ---------- centered banner: rankings and group play ---------- */
+.hero.center { text-align: center; padding-top: 24px; }
+.hero.center > .art { width: 100%; opacity: .2; filter: saturate(.7); object-position: 50% 24%;
+  -webkit-mask-image: radial-gradient(70% 90% at 50% 30%, #000 30%, transparent 80%); mask-image: radial-gradient(70% 90% at 50% 30%, #000 30%, transparent 80%); }
+.bt small { display: block; font-family: "BC", var(--zh); font-weight: 700; font-size: 12px; letter-spacing: 6px; padding-left: 6px; color: var(--acc); }
+.bt b { display: block; font-weight: 900; letter-spacing: 8px; padding-left: 8px; line-height: 1.2; margin-top: 2px; white-space: nowrap; }
+.bt span { display: block; font-size: 17px; color: var(--soft); margin-top: 2px; letter-spacing: 1px; }
+.hero.center .chips { justify-content: center; }
+.pod { display: flex; justify-content: center; align-items: flex-end; gap: 14px; margin-top: 16px; }
+.pc { width: 218px; text-align: center; }
+.pc .ring { width: 72px; height: 72px; margin: 0 auto 8px; border-radius: 50%; padding: 3px; background: var(--mc); box-shadow: 0 0 20px var(--mg); }
+.pc.p1 .ring { width: 92px; height: 92px; }
+.pc .ring img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #14161a; }
+.pc.p1 { --mc: linear-gradient(135deg, #fff3c4, #f0c35a 40%, #a8741c); --mg: rgba(240,195,90,.45); --mt: #f5cf6b; }
+.pc.p2 { --mc: linear-gradient(135deg, #ffffff, #c9d1db 45%, #6f7a87); --mg: rgba(201,209,219,.22); --mt: #d6dde6; }
+.pc.p3 { --mc: linear-gradient(135deg, #ffd9b8, #cd8a55 45%, #7a4522); --mg: rgba(205,138,85,.3); --mt: #e2a476; }
+.pc .pn2 { display: block; font-size: 18px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 17px; }
+.pc .v { font-size: 30px; line-height: 1.1; color: var(--mt); margin-top: 2px; }
+.pc .v em { font-style: normal; font-family: var(--zh); font-size: 15px; font-weight: 800; margin-left: 3px; }
+.pc .base { margin-top: 8px; height: 48px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.02)); border-top: 3px solid var(--mt); }
+.pc.p1 .base { height: 62px; } .pc.p3 .base { height: 36px; }
+.pc .base span { position: relative; top: -2px; font-size: 32px; line-height: 1; font-weight: 800; color: var(--mt); }
+.podbox { padding: 6px 0 0; background: #14161a; }
+.pc .ring i { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #14161a;
+  background: radial-gradient(circle at 50% 35%, #353b45, #15181c 75%); font-style: normal; font-size: 28px; font-weight: 900; color: var(--mt); }
+.pc.p1 .ring i { font-size: 36px; }
+.hero.center > .wm { left: 50%; right: auto; width: 420px; height: 420px; transform: translate(-50%, -50%) rotate(-10deg); opacity: .08; }
+.hero.center.poster { background: radial-gradient(50% 130% at 50% -10%, var(--pc, var(--acc-g)), transparent 70%),
+  repeating-linear-gradient(104deg, rgba(255,255,255,.035) 0 1px, transparent 1px 12px), linear-gradient(180deg, #16191e, #0c0e11); }
+.hero.center.poster::before { background: linear-gradient(115deg, transparent 28%, rgba(255,255,255,.05) 38%, transparent 39.5%, transparent 60%, rgba(255,255,255,.04) 63%, transparent 64.5%); }
+.hero.center.vivid > .art { opacity: .45; filter: none; }
+/* TFT season banner: full width and top aligned, the title on a soft dark spot */
+.hero.center.wide > .art { opacity: .85; filter: saturate(1.05); object-position: 50% 0;
+  -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 100%); mask-image: linear-gradient(180deg, #000 60%, transparent 100%); }
+.hero.center.wide::after { top: 0; height: auto; opacity: 1;
+  background: radial-gradient(30% 52% at 50% 52%, rgba(12,14,17,.62), rgba(12,14,17,.22) 70%, transparent 100%), linear-gradient(0deg, rgba(20,22,26,.9), transparent 40%); }
+.hero.center.wide .bt b, .hero.center.wide .bt span, .hero.center.vivid .bt b, .hero.center.vivid .bt span { text-shadow: 0 2px 14px rgba(0,0,0,.85), 0 0 3px rgba(0,0,0,.6); }
+.bt .slogo { display: block; height: 50px; margin: 0 auto 4px; filter: drop-shadow(0 2px 8px rgba(0,0,0,.7)); }
+/* two-sided banner (team split): blue and red halves, a splash on each side */
+.hero.center.pair { background: linear-gradient(90deg, rgba(61,139,255,.3), transparent 40%, transparent 60%, rgba(255,70,85,.28)),
+  radial-gradient(50% 130% at 50% -10%, var(--acc-g), transparent 70%), #14161a; }
+
+/* ---------- duel banner (group PK): two players, the number of categories each one wins in the middle ---------- */
+.hero.duel { padding: 20px 28px 24px; text-align: center; }
+.hero.duel > .art, .hero.pair > .art { width: 50%; opacity: .42; }
+.hero.duel > .art.al, .hero.pair > .art.al { left: 0; right: auto; object-position: 35% 20%;
+  -webkit-mask-image: linear-gradient(270deg, transparent 0, rgba(0,0,0,.7) 40%, #000 80%); mask-image: linear-gradient(270deg, transparent 0, rgba(0,0,0,.7) 40%, #000 80%); }
+.hero.duel > .art.ar, .hero.pair > .art.ar { right: 0; object-position: 65% 20%;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, rgba(0,0,0,.7) 40%, #000 80%); mask-image: linear-gradient(90deg, transparent 0, rgba(0,0,0,.7) 40%, #000 80%); }
+.du { display: grid; grid-template-columns: 1fr 190px 1fr; align-items: center; gap: 10px; margin-top: 12px; }
+.du-p { display: flex; align-items: center; gap: 16px; min-width: 0; text-align: left; }
+.du-p.r { flex-direction: row-reverse; text-align: right; }
+.du-p .av { width: 84px; height: 84px; }
+.du-n { min-width: 0; }
+.du-n b { display: block; font-weight: 900; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.du-n b.n { font-weight: 800; }
+.du-n small { display: block; margin-top: 4px; font-size: 13px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.du-n .chips { margin-top: 8px; }
+.du-p.r .chips { justify-content: flex-end; }
+.du-s { display: grid; grid-template-columns: 1fr 28px 1fr; align-items: center; font-size: 78px; line-height: 1; }
+.du-s span { color: #687080; } .du-s span:first-child { text-align: right; } .du-s span:last-child { text-align: left; }
+.du-s span.w { color: #fff; text-shadow: 0 0 26px var(--acc-g); }
+.du-s i { font-style: normal; font-size: 40px; color: #687080; transform: translateY(-5px); }
+.du-m small { display: block; margin-top: 4px; font-size: 12px; letter-spacing: 6px; padding-left: 6px; color: var(--muted); }
+.hero.duel > .chips { justify-content: center; margin-top: 14px; }
+
+/* ---------- section titles ---------- */
+.sec { margin-top: 18px; }
+.sec.t { margin-top: 0; }
+.st { display: flex; align-items: center; gap: 16px; margin: 24px 20px 12px; }
+.st::before, .st::after { content: ""; flex: 1; height: 1px; }
+.st::before { background: linear-gradient(90deg, transparent, var(--acc-t) 70%, var(--acc)); }
+.st::after { background: linear-gradient(90deg, var(--acc), var(--acc-t) 30%, transparent); }
+.st > div { position: relative; padding: 0 16px; text-align: center; }
+.st > div::before, .st > div::after { content: ""; position: absolute; top: 11px; width: 6px; height: 6px; background: var(--acc); transform: rotate(45deg); }
+.st > div::before { left: 0; } .st > div::after { right: 0; }
+.st b { display: block; font-size: 19px; font-weight: 900; letter-spacing: 6px; padding-left: 6px; line-height: 1.2; white-space: nowrap; }
+.st small { display: block; font-family: "BC", var(--zh); font-weight: 700; font-size: 11px; letter-spacing: 4px; padding-left: 4px; color: var(--acc); }
+/* esports: trapezoid tab between the team colours */
+.h2 { position: relative; display: flex; justify-content: center; margin: 22px 20px 12px; }
+.h2::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--blue), var(--vio) 50%, var(--red)); }
+.h2.in { margin: 0 0 14px; } .h2.in::before { display: none; }
+.tab { position: relative; z-index: 1; min-width: 190px; padding: 7px 34px 6px; text-align: center; overflow: hidden;
+  background: linear-gradient(90deg, var(--blue), var(--vio) 50%, var(--red)); clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 16px 100%); }
+.tab::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 0 30%, rgba(255,255,255,.36) 44%, transparent 58%); }
+.tab b, .tab small { position: relative; z-index: 1; }
+.tab b { display: block; font-size: 20px; font-weight: 900; letter-spacing: 6px; padding-left: 6px; color: #fff; line-height: 1.15; text-shadow: 0 1px 3px rgba(0,0,0,.45); white-space: nowrap; }
+.tab small { display: block; font-family: "BC", var(--zh); font-weight: 700; font-size: 11px; letter-spacing: 4px; padding-left: 4px; color: rgba(255,255,255,.85); }
+
+/* ---------- panels ---------- */
+.wrap { margin: 0 20px; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pn { position: relative; background: var(--panel); padding: 16px 18px; box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+.pn::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--acc), transparent 72%); }
+.pn h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 800; margin-bottom: 12px; }
+.pn h3 img { width: 24px; height: 24px; object-fit: contain; }
+.pn h3 small { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 500; }
+.pn h3 .dot { width: 8px; height: 8px; border-radius: 50%; }
+.meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.note { text-align: center; font-size: 12px; color: var(--muted); margin: 10px 20px 0; }
+.empty { text-align: center; color: var(--muted); padding: 22px 18px; }
+
+/* ---------- data atoms ---------- */
+.sc { display: inline-block; padding: 0 7px; border-radius: 4px; line-height: 19px; font-size: 13px; }
+.sc.op { background: linear-gradient(90deg, #ffffff, #8ec5ff 45%, #b388ff); color: #1a1033; }
+.sc.hi { background: var(--scb); color: var(--scf); } .sc.mid { background: var(--fill2); color: var(--text); } .sc.low { background: var(--fill); color: var(--muted); }
+.tg { display: inline-block; padding: 0 7px; border-radius: 4px; line-height: 19px; font-size: 11.5px; font-weight: 800; background: var(--fill); color: var(--soft); white-space: nowrap; }
+.tg.star { background: linear-gradient(90deg, #8af5ff, #1fb3df); color: #032731; }
+.tg.mvp { background: linear-gradient(90deg, #ffe08a, #f0a646); color: #2b1d00; }
+.tg.ace { background: linear-gradient(90deg, #c4b5fd, #8b5cf6); color: #fff; }
+.tg.multi { background: rgba(240,96,110,.2); color: var(--loset); }
+.it { display: flex; gap: 2px; align-items: center; }
+.it img, .it i { width: 24px; height: 24px; border-radius: 4px; background: var(--slot); display: block; }
+.it > :nth-child(7) { border-radius: 50%; margin-left: 4px; }
+.it > img:nth-child(8) { border-radius: 50%; box-shadow: 0 0 0 1.5px #c8aa6e; margin-left: 3px; }
+.sr { display: grid; grid-template-columns: 21px 21px; gap: 3px; }
+.sr img, .sr i { width: 21px; height: 21px; border-radius: 4px; background: var(--slot); display: block; }
+.ch { position: relative; width: 56px; height: 56px; }
+.ch img { width: 56px; height: 56px; clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%); }
+.ch .lv { position: absolute; right: -6px; bottom: -4px; font-size: 13px; background: #0d0f12; color: #e8eaed; padding: 0 4px; line-height: 16px; }
+.kda b { font-size: 25px; line-height: 1; white-space: nowrap; }
+.kda b i { font-style: inherit; color: var(--dim); margin: 0 3px; font-size: 19px; }
+.kda b em { font-style: inherit; color: var(--dt); }
+.kda small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+/* ---------- key / value ---------- */
+.kvs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kv { background: var(--panel); padding: 9px 14px 10px; border-left: 3px solid var(--acc-t); box-shadow: inset 0 0 0 1px var(--edge); }
+.kv.wide { grid-column: span 2; }
+.kv small { display: block; font-size: 12px; color: var(--muted); }
+.kv b { display: block; font-size: 15px; font-weight: 700; word-break: break-all; margin-top: 1px; }
+
+/* ---------- tables ---------- */
+.tb { width: 100%; border-collapse: separate; border-spacing: 0 4px; font-size: 14px; }
+.tb.fixed { table-layout: fixed; }
+.tb th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 0 10px; letter-spacing: 1px; white-space: nowrap; }
+.tb td { background: var(--panel); padding: 8px 10px; vertical-align: middle; box-shadow: inset 0 1px 0 var(--edge), inset 0 -1px 0 var(--edge); }
+.tb td:first-child { box-shadow: inset 1px 0 0 var(--edge), inset 0 1px 0 var(--edge), inset 0 -1px 0 var(--edge); }
+.tb td:last-child { box-shadow: inset -1px 0 0 var(--edge), inset 0 1px 0 var(--edge), inset 0 -1px 0 var(--edge); }
+.tb tr.rwin td { background: var(--pw); } .tb tr.rlose td { background: var(--pl); } .tb tr.rme td { background: var(--pm); }
+.tb tr.rwin td:first-child { box-shadow: inset 3px 0 0 var(--win); } .tb tr.rlose td:first-child { box-shadow: inset 3px 0 0 var(--lose); }
+.tb tr.rme td:first-child { box-shadow: inset 3px 0 0 var(--acc); }
+.tb td .cl { display: flex; align-items: center; gap: 9px; }
+.tb td .cl > img { width: 30px; height: 30px; border-radius: 5px; object-fit: cover; flex: none; }
+.tb td .cl > div { min-width: 0; }
+.tb td.logo .cl > img { object-fit: contain; border-radius: 0; }
+.tb td small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.tb td small.inl { display: inline; margin-left: 6px; }
+.tb td.n { font-size: 17px; }
+.tb td.n.r1, .tb td.n.r2, .tb td.n.r3 { font-size: 20px; }
+.pill { display: inline-block; min-width: 40px; text-align: center; padding: 0 8px; border-radius: 4px; font-family: "BC", var(--zh); font-weight: 800; font-size: 15px; line-height: 22px; letter-spacing: .5px; white-space: nowrap; }
+.strip { margin-top: 4px; white-space: nowrap; display: flex; gap: 2px; }
+.strip img { width: 22px; height: 22px; border-radius: 4px; }
+.strip img.core { box-shadow: 0 0 0 2px #c8aa6e; }
+.strip img.spell { border-radius: 50%; }
+td.bigstrip .strip { margin-top: 0; flex-wrap: wrap; gap: 5px; }
+td.bigstrip .strip img { width: 38px; height: 38px; border-radius: 6px; }
+td.iconsonly .strip { gap: 6px; }
+td.iconsonly .strip img { width: 28px; height: 28px; border-radius: 5px; }
+.strip img.c1 { box-shadow: 0 0 0 2px #8f979f; } .strip img.c2 { box-shadow: 0 0 0 2px #1fb35f; } .strip img.c3 { box-shadow: 0 0 0 2px #2f8ff0; }
+.strip img.c4 { box-shadow: 0 0 0 2px #c44ff0; } .strip img.c5 { box-shadow: 0 0 0 2px #f2b53a; }
+.strip .cu { position: relative; flex: none; display: flex; }
+.strip .cu i { position: absolute; right: -5px; top: -7px; font-style: normal; font-size: 13px; line-height: 1; color: #ffd666; text-shadow: 0 0 2px #000, 0 0 3px #000; }
+td.c1 .cl > img { box-shadow: 0 0 0 2px #8f979f; } td.c2 .cl > img { box-shadow: 0 0 0 2px #1fb35f; } td.c3 .cl > img { box-shadow: 0 0 0 2px #2f8ff0; }
+td.c4 .cl > img { box-shadow: 0 0 0 2px #c44ff0; } td.c5 .cl > img { box-shadow: 0 0 0 2px #f2b53a; }
+.tb .vsx { font-weight: 800; }
+/* top rows as cards: tier list leaders, lane rows */
+.tops { display: grid; gap: 12px; margin-bottom: 8px; }
+.tops.top3 { grid-template-columns: repeat(3, 1fr); }
+.tops.cardrow { grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 0; }
+.tc { position: relative; background: var(--panel); padding: 14px 12px 12px; text-align: center; box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+.tc::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--acc), transparent); }
+.tc.g1::before { background: linear-gradient(90deg, transparent, #f0c35a, transparent); }
+.tc-rk { position: absolute; left: 12px; top: 9px; text-align: left; }
+.tc-rk b { display: block; font-size: 28px; line-height: 1; color: var(--muted); }
+.tc-rk small { display: block; font-size: 12px; margin-top: 2px; }
+.tc > img { width: 76px; height: 76px; margin: 2px auto 9px; clip-path: polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%); }
+.tc .strip { display: grid; grid-template-columns: repeat(5, 32px); justify-content: center; gap: 7px 6px; margin: 30px 0 12px; }
+.tc .strip img { width: 32px; height: 32px; border-radius: 5px; }
+.tc-n { display: block; font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc .pill { margin-top: 6px; }
+.tc-s { display: flex; justify-content: center; gap: 16px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
+.tc-s b { display: block; font-size: 19px; line-height: 1.1; }
+.tc-s small { display: block; font-size: 11px; color: var(--muted); }
+.tops.cardrow .tc { padding: 10px 8px 10px; }
+.tops.cardrow .tc-rk { left: 9px; top: 6px; }
+.tops.cardrow .tc-rk b { font-size: 20px; }
+.tops.cardrow .tc > img { width: 50px; height: 50px; margin: 4px auto 6px; }
+.tops.cardrow .tc-n { font-size: 13.5px; }
+.tops.cardrow .pill { font-size: 13px; line-height: 19px; min-width: 34px; margin-top: 4px; }
+.tops.cardrow .tc-s { gap: 10px; margin-top: 7px; padding-top: 6px; }
+.tops.cardrow .tc-s b { font-size: 15px; }
+
+/* ---------- list / text ---------- */
+.pn ul { padding-left: 18px; line-height: 1.75; }
+.pn .text { white-space: pre-wrap; line-height: 1.75; }
+
+/* ---------- tiles ---------- */
+.tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 10px; }
+.tile { width: 84px; text-align: center; font-size: 12px; color: var(--soft); }
+.tile > img { width: 52px; height: 52px; border-radius: 6px; margin: 0 auto 6px; object-fit: cover; }
+.tile .ph { width: 52px; height: 52px; border-radius: 6px; background: var(--fill); margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 18px; }
+.tile span { display: block; line-height: 1.3; }
+.tile small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.tile .strip { justify-content: center; margin-top: 4px; }
+.tile .strip img { width: 20px; height: 20px; }
+.tile.gold > img { box-shadow: 0 0 0 2px #c8aa6e, 0 0 12px rgba(200,170,110,.35); }
+.tile.u1 > img { box-shadow: 0 0 0 2px #8f979f; } .tile.u2 > img { box-shadow: 0 0 0 2px #1fb35f; } .tile.u3 > img { box-shadow: 0 0 0 2px #2f8ff0; }
+.tile.u4 > img { box-shadow: 0 0 0 2px #c44ff0; } .tile.u5 > img { box-shadow: 0 0 0 2px #f2b53a, 0 0 12px rgba(242,181,58,.35); }
+.tile.core { position: relative; }
+.tile.core::before { content: "★"; position: absolute; top: -8px; left: 50%; margin-left: 17px; z-index: 1; font-size: 17px; line-height: 1; color: #ffd666; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.tile.core > span { color: var(--goldt); font-weight: 800; }
+.tile .core { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 3px; font-size: 10.5px; font-weight: 800; line-height: 16px; background: linear-gradient(90deg, #ffe08a, #f0a646); color: #2b1d00; }
+.tile.trait { width: 76px; }
+.tile.trait > img { width: 44px; height: 44px; padding: 7px; border-radius: 0; background: #4a5568;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.tile.trait.s1 > img { background: linear-gradient(135deg, #b9774a, #6e4022); }
+.tile.trait.s2 > img { background: linear-gradient(135deg, #c9d3de, #6d7b89); }
+.tile.trait.s3 > img { background: linear-gradient(135deg, #f7d77c, #b07d1e); }
+.tile.trait.s4 > img, .tile.trait.s5 > img, .tile.trait.s6 > img { background: linear-gradient(135deg, #ffffff, #a9dcff 30%, #8b5cf6 65%, #f0c6ff); }
+.tile.trait span { font-weight: 700; color: var(--text); }
+.tile.aug { width: 104px; }
+.tile.aug > img { width: 54px; height: 54px; padding: 5px; border-radius: 12px; background: #0e0e10; box-shadow: 0 0 0 2px #5b6474; }
+.tile.aug-silver > img { box-shadow: 0 0 0 2px #b7c4d1; }
+.tile.aug-gold > img { box-shadow: 0 0 0 2px #e0b252, 0 0 10px rgba(224,178,82,.35); }
+.tile.aug-prismatic > img { box-shadow: 0 0 0 2px #c4b5fd, 0 0 12px rgba(139,92,246,.55); }
+.tile.aug span { font-weight: 700; color: var(--text); }
+.tile.rank { width: auto; min-width: 230px; display: flex; align-items: center; gap: 12px; text-align: left; background: var(--panel); padding: 8px 16px 8px 8px; }
+.tile.rank > img { width: 60px; height: 60px; margin: 0; border-radius: 0; object-fit: contain; }
+.tile.rank span { font-weight: 800; font-size: 16px; color: var(--text); }
+.tile.good > img, .tile.bad > img { border-radius: 50%; }
+/* build path */
+.flow { display: flex; align-items: flex-start; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.grp > small { display: block; text-align: center; font-size: 12px; color: var(--muted); letter-spacing: 3px; margin-bottom: 9px; }
+.grp.core > small { color: var(--goldt); }
+.its { display: flex; gap: 8px; }
+.itm { width: 70px; text-align: center; }
+.itm img { width: 54px; height: 54px; border-radius: 6px; margin: 0 auto 7px; }
+.grp.core .itm img { box-shadow: 0 0 0 2px #c8aa6e, 0 0 14px rgba(200,170,110,.35); }
+.itm span { display: block; font-size: 12px; line-height: 1.3; color: var(--soft); }
+.arr { align-self: center; margin-top: 8px; color: var(--dim); font-size: 26px; font-weight: 300; }
+.fol-l { font-size: 12px; color: var(--muted); text-align: center; margin-top: 16px; letter-spacing: 2px; }
+.fol { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 8px; }
+.fol > div { text-align: center; min-width: 0; }
+.fol img { width: 40px; height: 40px; border-radius: 5px; margin: 0 auto 5px; }
+.fol span { display: block; font-size: 11.5px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fol b { display: block; font-size: 15px; margin-top: 1px; }
+.folrow + .folrow { margin-top: 2px; }
+/* runes */
+.rbody { display: flex; flex-direction: column; justify-content: center; gap: 14px; min-height: 172px; }
+.key { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.key img { width: 62px; height: 62px; border-radius: 50%; background: #0e0e10; box-shadow: 0 0 0 2px #c8aa6e, 0 0 16px rgba(200,170,110,.3); padding: 3px; }
+.key span { font-size: 17px; font-weight: 800; }
+.rr { display: flex; justify-content: space-evenly; }
+.rr > div { width: 80px; text-align: center; font-size: 12px; color: var(--soft); }
+.rr img { width: 40px; height: 40px; border-radius: 50%; background: #0e0e10; margin: 0 auto 5px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.sh { display: flex; justify-content: space-evenly; padding-top: 12px; border-top: 1px dashed var(--line); }
+.sh > div { width: 70px; text-align: center; font-size: 11.5px; color: var(--muted); }
+.sh img { width: 26px; height: 26px; border-radius: 50%; background: #0e0e10; padding: 2px; margin: 0 auto 4px; }
+/* skills */
+.sk-top { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px 40px; align-items: center; margin-bottom: 16px; }
+.sk-top .lb { font-size: 12px; color: var(--muted); margin-right: 10px; letter-spacing: 1px; }
+.sk-top .pk { font-size: 17px; margin-left: 10px; }
+.sp, .mx { display: flex; align-items: center; }
+.sp img { width: 38px; height: 38px; border-radius: 6px; margin-right: 6px; }
+.kk { position: relative; }
+.kk img { width: 38px; height: 38px; border-radius: 6px; }
+.kk b { position: absolute; right: -5px; bottom: -5px; font-size: 12px; line-height: 16px; padding: 0 4px; background: #0d0f12; color: #e8eaed; border: 1px solid rgba(255,255,255,.18); }
+.mx .ar { color: var(--dim); font-size: 22px; margin: 0 9px; font-style: normal; }
+.skg { display: grid; gap: 3px; align-items: center; }
+.sl { display: flex; align-items: center; gap: 5px; }
+.sl img { width: 24px; height: 24px; border-radius: 4px; }
+.sl b { font-size: 13px; color: var(--muted); }
+.sc2 { height: 24px; background: var(--fill); font-size: 14px; text-align: center; line-height: 24px; color: #0e0e10; }
+.sc2.k-Q { background: #4f8ef7; } .sc2.k-W { background: #3fb27f; } .sc2.k-E { background: #e8913b; } .sc2.k-R { background: #e0b252; }
+/* matchups: diverging bars around 50% */
+.mu { display: grid; grid-template-columns: 36px 1fr 132px 52px; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+.pn h3 + .mu { border-top: none; }
+.mu img { width: 36px; height: 36px; border-radius: 5px; }
+.mu span { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mu .b { position: relative; height: 8px; background: var(--fill); }
+.mu .b::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: var(--muted); opacity: .7; }
+.mu .b i { position: absolute; top: 0; bottom: 0; }
+.mu.lose .b i { right: 50%; background: linear-gradient(270deg, rgba(240,96,110,.35), var(--lose)); }
+.mu.win .b i { left: 50%; background: linear-gradient(90deg, rgba(63,209,138,.35), var(--win)); }
+.mu b { font-size: 17px; text-align: right; }
+.mu.lose b { color: var(--loset); } .mu.win b { color: var(--wint); }
+/* generic icon rows */
+.ir { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.ir:first-child { border-top: none; }
+.ir-l { width: 60px; color: var(--muted); font-size: 13px; flex: none; }
+.ir-i { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.ir-i img { width: 34px; height: 34px; border-radius: 6px; }
+.ir-i b { display: block; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-i small { display: block; color: var(--muted); font-size: 11.5px; }
+
+/* ---------- match rows ---------- */
+.mr { position: relative; display: grid; grid-template-columns: 66px 56px 46px 1fr 196px; gap: 12px; align-items: center;
+  padding: 12px 14px 12px 18px; margin: 0 20px 8px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--edge); }
+.mr.solo { grid-template-columns: 66px 56px 46px 1fr; }
+.mr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--rc); }
+.mr.mc-win { --rc: var(--win); background: linear-gradient(90deg, var(--pw), var(--panel) 30%); }
+.mr.mc-lose { --rc: var(--lose); background: linear-gradient(90deg, var(--pl), var(--panel) 30%); }
+.mr.mc-remake { --rc: var(--dim); }
+.res b { display: block; font-size: 17px; font-weight: 900; color: var(--rc); letter-spacing: 1px; }
+.res span { display: block; font-size: 17px; margin-top: 4px; color: var(--soft); }
+.res small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.res small.q { margin-top: 3px; color: var(--soft); }
+.l1 { display: grid; grid-template-columns: 134px 120px 80px 1fr; gap: 10px; align-items: end; }
+.l1 small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.dm b, .cs b { font-size: 19px; line-height: 1; }
+.dm .bar { height: 5px; background: var(--fill); margin-top: 5px; }
+.dm .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff7a3d, #ffb347); }
+.scw .sc { font-size: 16px; line-height: 23px; padding: 0 9px; }
+.l2 { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.l2 .tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.pl { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; font-size: 11.5px; padding-left: 12px; border-left: 1px solid var(--line); }
+.pl div { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--muted); }
+.pl img { width: 16px; height: 16px; border-radius: 3px; flex: none; }
+.pl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl .me { color: var(--text); font-weight: 800; }
+.pl .me img { box-shadow: 0 0 0 1.5px var(--acc); }
+
+/* ---------- team scoreboard (single game) ---------- */
+.team { margin: 0 20px 14px; }
+.team.blue { --sc: var(--blue); --sct: rgba(61,139,255,.42); } .team.red { --sc: var(--red); --sct: rgba(255,70,85,.36); }
+.team.none { --sc: var(--acc); --sct: var(--acc-t); }
+.tbar { display: flex; align-items: center; gap: 10px; padding: 9px 20px 9px 14px; background: linear-gradient(90deg, var(--sct), transparent 78%), #17191d;
+  border-left: 4px solid var(--sc); clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+.tbar .tl { width: 32px; height: 32px; object-fit: contain; }
+.tbar .tn2 { font-family: "BC", var(--zh); font-size: 25px; font-weight: 800; white-space: nowrap; }
+.tbar .tn2.zh { font-size: 20px; font-weight: 900; letter-spacing: 2px; }
+.tbar .tk { font-size: 22px; margin-left: 6px; white-space: nowrap; }
+.tbar .tgd, .tbar .to { display: flex; align-items: center; gap: 4px; }
+.tbar .tgd img, .tbar .to img { width: 20px; height: 20px; object-fit: contain; }
+.tbar .tgd b, .tbar .to b { font-size: 19px; margin-right: 5px; }
+.bans { margin-left: auto; display: flex; align-items: center; gap: 3px; }
+.bans small { color: var(--muted); font-size: 12px; margin-right: 3px; }
+.bans i { position: relative; display: block; width: 24px; height: 24px; background: rgba(255,255,255,.06); }
+.bans img { width: 24px; height: 24px; filter: grayscale(1) brightness(.55); }
+.bans i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(135deg, transparent 46%, rgba(230,233,238,.85) 46% 54%, transparent 54%); }
+.pc2 { display: inline-flex; align-items: center; padding: 3px 15px; font-size: 13px; font-weight: 800; letter-spacing: 1px; white-space: nowrap; line-height: 1.35;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.pc2.blue { background: var(--blue); color: #fff; } .pc2.red { background: var(--red); color: #fff; }
+.pc2.win { background: #3fd18a; color: #06291a; } .pc2.lose { background: rgba(255,255,255,.15); color: #c3c9d1; }
+.pc2.acc { background: var(--acc); color: #fff; } .pc2.dark { background: rgba(0,0,0,.5); color: #b9c0c9; font-weight: 600; }
+.pc2.dark b { color: #fff; font-size: 18px; margin-left: 4px; }
+.pr { position: relative; display: grid; grid-template-columns: 24px 50px 46px 150px 104px 108px 54px 64px 1fr; gap: 8px; align-items: center;
+  padding: 8px 14px 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: inset 1px 0 0 var(--edge), inset -1px 0 0 var(--edge); }
+.pr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--sc); opacity: .55; }
+.pr.me { background: linear-gradient(90deg, var(--pm), var(--panel) 55%); } .pr.me::before { background: var(--acc); opacity: 1; width: 4px; }
+.pr.pmvp { background: linear-gradient(90deg, rgba(255,204,77,.15), var(--panel) 45%); } .pr.pmvp::before { background: var(--gold); opacity: 1; }
+.pr.pace { background: linear-gradient(90deg, rgba(167,139,250,.14), var(--panel) 45%); } .pr.pace::before { background: #a78bfa; opacity: 1; }
+.pr .role { width: 22px; height: 22px; filter: grayscale(1) brightness(1.9); opacity: .9; }
+.pr .ch, .pr .ch img { width: 46px; height: 46px; }
+.pr .nm2 b { display: block; font-size: 16px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pr .nm2 b.zh { font-size: 14px; }
+.pr .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-top: 3px; }
+.pr .sc, .pr .tg { border-radius: 0; clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%); padding: 0 8px; line-height: 17px; }
+.pr .tg { font-size: 11px; }
+.pr .kda b { font-size: 23px; }
+.pr .kda b i { font-size: 18px; margin: 0 2px; }
+.pr .kda small { margin-top: 3px; }
+.pr .dm b { font-size: 17px; }
+.pr .dm .b1, .pr .dm .b2 { height: 5px; background: var(--fill); margin-top: 3px; }
+.pr .dm .b1 i, .pr .dm .b2 i { display: block; height: 100%; }
+.pr .dm .b1 i { background: linear-gradient(90deg, #ff7a3d, #ffb347); } .pr .dm .b2 i { background: #7d8796; }
+.pr .dm small, .pr .cs small, .pr .gd small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+.pr .cs b, .pr .gd b { display: block; font-size: 19px; line-height: 1.1; }
+.pr .it img, .pr .it i { width: 22px; height: 22px; }
+.pr .it > img:nth-child(8) { margin-left: 2px; }
+
+/* ---------- esports scoreboard banner ---------- */
+.hero.vs { padding: 16px 28px 24px; border-bottom-width: 4px;
+  background: linear-gradient(104deg, var(--lt) 0 34%, transparent 34.15%), linear-gradient(104deg, transparent 0 65.85%, var(--rt) 66%),
+    repeating-linear-gradient(104deg, rgba(255,255,255,.03) 0 2px, transparent 2px 10px), radial-gradient(50% 130% at 50% -10%, var(--acc-t), transparent 70%), #121418; }
+.hero.vs::after { display: none; }
+/* league poster behind the scoreboard: team tints on both sides, the league logo as a large tilted watermark */
+.hero.vs.poster { background: radial-gradient(38% 120% at 50% -8%, var(--acc-t), transparent 72%),
+  linear-gradient(104deg, var(--lt) 0 18%, transparent 46%), linear-gradient(284deg, var(--rt) 0 18%, transparent 46%),
+  repeating-linear-gradient(104deg, rgba(255,255,255,.035) 0 1px, transparent 1px 12px), linear-gradient(180deg, #16191e, #0c0e11); }
+.hero.vs.poster::before { background: linear-gradient(115deg, transparent 36%, rgba(255,255,255,.06) 44%, transparent 45.5%, transparent 53%, rgba(255,255,255,.045) 56%, transparent 57.5%); }
+.hero.vs > .wm { left: 50%; right: auto; width: 620px; height: 620px; transform: translate(-50%, -42%) rotate(-12deg); opacity: .075; }
+/* official poster: full width and darkened, the team tints on top */
+.hero.vs > .art { width: 100%; opacity: .55; object-position: 50% 30%; -webkit-mask-image: none; mask-image: none; }
+.hero.vs.official { background: #0c0e11; }
+.hero.vs.official::after { display: block; top: 0; height: auto;
+  background: linear-gradient(104deg, var(--lt) 0 18%, transparent 46%), linear-gradient(284deg, var(--rt) 0 18%, transparent 46%), linear-gradient(180deg, rgba(12,14,17,.45), rgba(12,14,17,.8)); }
+.eyebrow { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; white-space: nowrap; }
+.eyebrow .lg { width: 34px; height: 34px; object-fit: contain; }
+.eyebrow b { color: var(--text); font-size: 17px; font-weight: 900; letter-spacing: 1px; }
+.eyebrow em { margin-left: auto; font-style: normal; }
+.sb { display: grid; grid-template-columns: 1fr 300px 1fr; align-items: center; margin-top: 8px; }
+.vt { display: flex; align-items: center; gap: 22px; min-width: 0; }
+.vt.r { flex-direction: row-reverse; text-align: right; }
+.side-b { flex: 0 1 160px; min-width: 96px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+/* team logos in colour, straight on the banner and rows (no frame); the losing side is dimmed */
+.tlogo { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.tlogo img { object-fit: contain; }
+.blogo { width: 100%; height: 120px; }
+.blogo img { width: 100%; height: 120px; object-fit: contain; filter: drop-shadow(0 6px 16px rgba(0,0,0,.6)); }
+.vt.win .blogo img { filter: drop-shadow(0 6px 16px rgba(0,0,0,.6)) drop-shadow(0 0 20px var(--tg)); }
+.vt.lose .blogo img, .vsr-t.lose .tlogo img { opacity: .4; }
+.ser { display: flex; align-items: center; gap: 8px; }
+.vt.r .ser, .vt.r .pips { flex-direction: row-reverse; }
+.ser b { font-size: 30px; line-height: 1; min-width: 16px; text-align: center; }
+.pips { display: flex; gap: 5px; }
+.pips i { width: 18px; height: 9px; transform: skewX(-20deg); background: rgba(255,255,255,.14); }
+.pips i.on { background: var(--tc); box-shadow: 0 0 0 1px rgba(255,255,255,.75), 0 0 9px var(--tg); }
+.tn { flex: none; min-width: 0; max-width: calc(100% - 118px); }  /* keeps its width, the logo gives way (down to 96px) */
+.tn b { display: block; font-family: "BC", var(--zh); font-size: 60px; font-weight: 800; line-height: .95; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vt.lose .tn b { color: #c9ced6; }
+.tn .chips { gap: 4px; margin-top: 10px; }
+.vt.r .chips { justify-content: flex-end; }
+.vmid { text-align: center; }
+.gb { display: inline-flex; align-items: stretch; }
+.gb span { display: flex; align-items: center; padding: 3px 18px; clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.gb .bo { margin-right: -4px; background: #0b0d10; color: #e9edf2; font-family: var(--zh); font-weight: 900; font-size: 19px; letter-spacing: 1px; }
+.gb .gn { padding: 3px 24px; background: var(--acc); color: #fff; font-size: 20px; font-weight: 900; letter-spacing: 4px; }
+.kills { display: grid; grid-template-columns: 1fr 40px 1fr; align-items: center; font-size: 100px; line-height: .95; margin-top: 6px; }
+.kills .ni { font-weight: 800; }
+.kills .kb { text-align: right; color: var(--lc); text-shadow: 0 0 28px var(--lg); } .kills .kr { text-align: left; color: var(--rc2); text-shadow: 0 0 28px var(--rg); }
+.kills i { font-style: normal; font-size: 46px; color: #6b7280; text-align: center; transform: translateY(-6px); }
+.kills.todo { display: block; font-size: 70px; color: #9aa3b0; }
+.cap { font-size: 12px; letter-spacing: 10px; padding-left: 10px; color: var(--muted); margin-top: 2px; }
+.vmid .meta { gap: 6px; margin-top: 8px; }
+.pc2.live { background: #ff4655; color: #fff; }
+
+/* ---------- esports match rows ---------- */
+.vsr { position: relative; margin: 0 20px 10px; padding: 10px 18px 14px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%); }
+.vsr::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--acc) 50%, transparent); opacity: .8; }
+.vsr.live::before { background: linear-gradient(90deg, transparent, #ff4655 50%, transparent); opacity: 1; }
+.vsr-top { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.vsr-top img { height: 18px; width: auto; max-width: 46px; object-fit: contain; }
+.vsr-top b { color: var(--text); font-weight: 700; }
+.vsr-top .no { font-weight: 800; color: var(--text); background: var(--fill2); padding: 0 7px; border-radius: 3px; font-size: 14px; }
+.vsr-row { display: grid; grid-template-columns: 1fr 200px 1fr; align-items: center; gap: 14px; margin-top: 8px; }
+.vsr-t { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.vsr-t.h { justify-content: flex-end; text-align: right; }
+.vsr-t b { font-family: "BC", var(--zh); font-size: 34px; font-weight: 800; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsr-t.lose b { color: var(--muted); }
+.vsr-t .tlogo img { width: 48px; height: 42px; }
+.vsr-m { text-align: center; }
+.vsr-s { display: grid; grid-template-columns: 1fr 24px 1fr; align-items: center; font-size: 48px; line-height: 1; }
+.vsr-s .a { text-align: right; } .vsr-s .b { text-align: left; }
+.vsr-s .w { color: var(--text); } .vsr-s .l { color: var(--dim); }
+.vsr-s i { font-style: normal; font-size: 26px; color: var(--dim); transform: translateY(-3px); }
+.vsr-vs { font-size: 38px; color: var(--dim); line-height: 1.1; }
+.vsr-sub { margin-top: 5px; display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.vsr-sub .pc2 { padding: 0 10px; font-size: 11.5px; }
+.vsr-sub .pc2 b { font-size: 14px; }
+.vsr.live .vsr-s .w, .vsr.live .vsr-s .l { color: var(--text); }
+
+/* ---------- esports standings ---------- */
+.stg-h, .stg { display: grid; grid-template-columns: 58px 1fr repeat(var(--nc, 3), 112px); align-items: center; }
+.stg-h { margin: 6px 20px 8px; padding: 0 18px; font-size: 12.5px; color: var(--muted); letter-spacing: 1px; }
+.stg-h span:nth-child(n+3) { text-align: center; }
+.stg { position: relative; margin: 0 20px 8px; padding: 10px 18px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+.stg::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--fill2); }
+.stg.p1::before { background: var(--r1); } .stg.p2::before { background: var(--r2); } .stg.p3::before { background: var(--r3); }
+.stg.p1 { background: linear-gradient(90deg, rgba(245,207,107,.13), var(--panel) 45%); }
+.stg-rk { font-size: 36px; font-weight: 800; line-height: 1; color: var(--dim); }
+.stg-t { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.stg-t > div:last-child { min-width: 0; }
+.stg-t .tlogo img { width: 42px; height: 36px; }
+.stg-t b { display: block; font-family: "BC", var(--zh); font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stg-t small { display: block; margin-top: 4px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stg-c { text-align: center; }
+.stg-c b { display: block; font-size: 26px; line-height: 1; }
+.stg-c.last b { font-size: 32px; font-weight: 800; color: var(--text); }
+.stg-c.last b.neg { color: var(--muted); }
+.stg-c .bar { display: block; width: 64px; height: 4px; margin: 7px auto 0; background: var(--fill2); transform: skewX(-20deg); }
+.stg-c .bar i { display: block; height: 100%; background: var(--acc); }
+
+/* ---------- series: one row per game ---------- */
+.sg { position: relative; margin: 0 20px 10px; padding: 12px 16px 10px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+.sg::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, var(--hc), var(--vio) 50%, var(--ac)); }
+.sg-row { display: grid; grid-template-columns: 1fr 112px 1fr; align-items: center; gap: 8px; }
+.sg-side { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sg-side.h { justify-content: flex-end; }
+.sg-k { font-size: 42px; font-weight: 800; min-width: 46px; text-align: center; line-height: 1; }
+.sg-side.lose .sg-k { color: var(--dim); }
+.sg-ch { display: flex; gap: 4px; }
+.sg-c { width: 46px; text-align: center; }
+.sg-c img { width: 42px; height: 42px; margin: 0 auto; clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%); }
+.sg-side.lose .sg-c img { filter: grayscale(.55) brightness(.8); }
+.sg-c.mvp img { outline: 2px solid var(--gold); outline-offset: -2px; }
+.sg-c small { display: block; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+.sg-c.mvp small { color: var(--goldt); font-weight: 800; }
+.sg-m { text-align: center; }
+.sg-m b { display: block; font-size: 16px; font-weight: 900; letter-spacing: 2px; }
+.sg-m span { display: block; font-size: 16px; color: var(--muted); }
+.sg-m .live { color: #ff6b7d; font-weight: 800; font-family: var(--zh); font-size: 13px; }
+.sg-foot { display: grid; grid-template-columns: 1fr 230px 1fr; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); align-items: center; }
+.sg-foot .h { display: flex; justify-content: flex-end; align-items: center; } .sg-foot .a { display: flex; align-items: center; }
+.ob { display: inline-flex; align-items: center; gap: 3px; margin: 0 5px; white-space: nowrap; }
+.ob img { width: 16px; height: 16px; object-fit: contain; }
+.ob b { color: var(--text); font-size: 15px; }
+.sg-mvp { display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; color: var(--soft); }
+.sg-mvp img { width: 20px; height: 20px; border-radius: 3px; }
+.sg-mvp b { font-size: 14px; color: var(--text); }
+.sg .pc2 { padding: 1px 10px; font-size: 11.5px; margin: 0 4px; }
+
+/* ---------- esports game: team stats, momentum, MVP ---------- */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 20px; }
+.panel { position: relative; background: var(--panel); padding: 0 18px 16px; box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%); }
+.panel::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--blue), var(--vio) 50%, var(--red)); }
+.cr { display: grid; grid-template-columns: 92px 1fr 92px; align-items: end; gap: 10px; margin: 9px 0; }
+.cr > b { font-size: 24px; line-height: 1; color: var(--muted); }
+.cr > b.lead { color: var(--text); }
+.cr > b.r { text-align: right; }
+.cr .c small { display: block; text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 5px; letter-spacing: 3px; }
+.cbar { display: flex; gap: 3px; height: 9px; }
+.cbar i { display: block; height: 100%; }
+.cbar .bb { background: linear-gradient(90deg, rgba(61,139,255,.42), var(--blue)); clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 100%, 0 100%); }
+.cbar .rb { background: linear-gradient(90deg, var(--red), rgba(255,70,85,.36)); clip-path: polygon(5px 0, 100% 0, 100% 100%, 0 100%); }
+.fs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 14px; }
+.f { display: flex; align-items: center; gap: 5px; padding: 3px 10px 3px 6px; font-size: 12px; background: var(--fill); border-left: 3px solid var(--sc); }
+.f.blue { --sc: var(--blue); } .f.red { --sc: var(--red); }
+.f img { width: 20px; height: 20px; object-fit: contain; }
+.f b { font-weight: 800; } .f small { color: var(--muted); }
+.panel.mom { display: flex; flex-direction: column; }
+.mom-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 6px; }
+.mom svg { display: block; width: 100%; height: auto; }
+.leads { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.ld { position: relative; padding: 7px 12px 7px 15px; background: var(--fill); }
+.ld::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--sc); }
+.ld.blue { --sc: var(--blue); } .ld.red { --sc: var(--red); }
+.ld small { display: block; font-size: 12px; color: var(--muted); }
+.ld b { font-size: 26px; line-height: 1.1; }
+.ld span { font-size: 12px; color: var(--soft); margin-left: 6px; }
+.mnote { margin-top: 9px; text-align: center; font-size: 11.5px; color: var(--muted); }
+.mvpc { position: relative; height: 190px; margin: 0 20px; overflow: hidden; background: #15171b;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 22px 100%, 0 calc(100% - 22px)); }
+.mvpc::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--sc); z-index: 2; }
+.mvpc .art { position: absolute; right: 0; top: 0; width: 70%; height: 100%; object-fit: cover; object-position: 62% 20%;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 45%); mask-image: linear-gradient(90deg, transparent 0, #000 45%); }
+.mv { position: relative; z-index: 1; padding: 16px 26px; }
+.mv-tag { display: inline-block; padding: 2px 18px; font-size: 15px; font-weight: 900; letter-spacing: 3px; color: #2a1d00; background: var(--gold);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.mv-name { font-family: "BC", var(--zh); font-size: 52px; font-weight: 800; line-height: 1.05; margin-top: 4px; }
+.mv-sub { display: flex; align-items: center; gap: 8px; color: var(--soft); font-size: 14px; }
+.mv-sub img { width: 22px; height: 22px; object-fit: contain; }
+.mv-sub .pc2 { padding: 1px 11px; font-size: 12px; }
+.mv-stats { display: grid; grid-template-columns: repeat(5, 108px); width: max-content; margin-top: 12px; background: rgba(10,12,15,.94); border-top: 2px solid var(--gold);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+.mv-stats div { position: relative; padding: 7px 14px 8px 16px; }
+.mv-stats div + div::before { content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: 1px; background: rgba(255,255,255,.14); transform: skewX(-14deg); }
+.mv-stats div:last-child b { color: var(--gold); }
+.mv-stats b { display: block; font-size: 25px; line-height: 1.05; }
+.mv-stats small { font-size: 11px; color: var(--muted); }
+
+/* ---------- group play ---------- */
+.lbr { display: grid; grid-template-columns: 116px 1fr 1fr 1fr; gap: 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.lbr:first-child { border-top: none; padding-top: 2px; }
+.lbr .bn { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 14px; white-space: nowrap; }
+.lbr .bn i { font-style: normal; font-size: 16px; }
+.lbr .bn small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+.lbr .e { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lbr .e .rk2 { font-size: 18px; width: 12px; text-align: center; color: var(--muted); flex: none; }
+.lbr .e img { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+.lbr .e span { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lbr .e b { font-size: 18px; white-space: nowrap; }
+.lbr .e b em { font-style: normal; font-family: var(--zh); font-size: 12px; color: var(--muted); margin-left: 2px; font-weight: 600; }
+.mds { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.md { position: relative; flex: 1 1 0; min-width: 96px; max-width: 160px; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 12px 6px 10px;
+  background: var(--panel); box-shadow: inset 0 0 0 1px var(--edge); clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+.md::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--mc2); }
+.md.good { --mc2: linear-gradient(90deg, transparent, #f0c35a, transparent); --rg: #f0c35a; }
+.md.bad { --mc2: linear-gradient(90deg, transparent, #8e96a3, transparent); --rg: #8e96a3; }
+.md .mi { position: relative; width: 44px; height: 44px; margin-bottom: 7px; }
+.md .mi img { width: 44px; height: 44px; border-radius: 50%; box-shadow: 0 0 0 2px var(--rg); }
+.md .mi i { position: absolute; right: -9px; bottom: -4px; font-style: normal; font-size: 16px; line-height: 1; }
+.md b { font-size: 14px; font-weight: 800; white-space: nowrap; }
+.md.bad b { color: var(--soft); }
+.md small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.md small.who { color: var(--soft); font-weight: 700; margin-top: 3px; }
+.pk-h { display: grid; grid-template-columns: 1fr 70px 1fr; align-items: center; padding-bottom: 12px; }
+.pk-p { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pk-p.r { flex-direction: row-reverse; text-align: right; }
+.pk-p img { width: 56px; height: 56px; flex: none; clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%); }
+.pk-p div { min-width: 0; }
+.pk-p b { display: block; font-size: 18px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-p small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-vs { text-align: center; font-size: 32px; font-weight: 800; color: var(--acc); }
+.pk-r { display: grid; grid-template-columns: 64px 1fr 84px 1fr 64px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.pn > .pk-r:first-child { border-top: none; padding-top: 2px; }
+.pk-r .lbl { text-align: center; color: var(--muted); font-size: 12.5px; letter-spacing: 1px; }
+.pk-r b { font-size: 19px; color: var(--muted); } .pk-r b.l { text-align: right; } .pk-r b.w { color: var(--text); }
+.pk-bar { height: 10px; background: var(--fill); position: relative; }
+.pk-bar i { position: absolute; top: 0; bottom: 0; background: var(--dim); }
+.pk-bar.l i { right: 0; } .pk-bar.r i { left: 0; }
+.pk-bar i.w { background: var(--acc); }
+.spl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.spl-t { position: relative; background: var(--panel); padding: 14px 16px 8px; box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+.spl-t::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--sc), transparent 80%); }
+.spl-t.blue { --sc: var(--blue); } .spl-t.red { --sc: var(--red); }
+.spl-t h3 { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 18px; font-weight: 900; letter-spacing: 2px; }
+.spl-t h3 small { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+.spl-m { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.spl-m img { width: 30px; height: 30px; object-fit: contain; } .spl-m i { width: 30px; flex: none; }
+.spl-m span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.spl-m small { color: var(--soft); font-size: 12.5px; white-space: nowrap; } .spl-m small.g { font-style: italic; color: var(--muted); }
+
+/* ---------- AI review ---------- */
+.ai { position: relative; background: var(--panel); padding: 16px 18px 12px; box-shadow: inset 0 0 0 1px var(--edge);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
+.ai::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: linear-gradient(90deg, var(--acc), #a78bfa 60%, transparent); }
+.ai-sum { font-size: 16px; font-weight: 800; line-height: 1.55; margin-bottom: 10px; padding-left: 12px; border-left: 3px solid var(--acc); }
+.ai-row { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; font-size: 14px; line-height: 1.6; }
+.ai-l { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 22px; margin-top: 1px; border-radius: 4px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.ai-l.good { background: rgba(63,209,138,.18); color: var(--wint); }
+.ai-l.bad { background: rgba(240,96,110,.18); color: var(--loset); }
+.ai-l.tip { background: rgba(255,204,77,.18); color: var(--goldt); }
+.ai-meta { margin-top: 8px; font-size: 11.5px; color: var(--muted); text-align: right; }
+
+/* ---------- recent form ---------- */
+.fm-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.fm-top small { font-size: 12px; color: var(--muted); }
+.fm-top .streak i { width: 21px; height: 21px; font-size: 11px; }
+.fm-head, .fm { display: grid; grid-template-columns: 84px 1fr 70px 70px; gap: 12px; align-items: center; }
+.fm-head { font-size: 11.5px; color: var(--muted); padding-bottom: 6px; }
+.fm-head span:nth-child(3), .fm-head span:nth-child(4) { text-align: right; }
+.fm-head i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 10px; vertical-align: -1px; }
+.fm { padding: 7px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.fm-l { color: var(--soft); font-weight: 700; }
+.fm-bar { position: relative; height: 12px; background: var(--fill); }
+.fm-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--acc); opacity: .8; }
+.fm-bar i.r { background: var(--gold); top: 4px; bottom: 4px; opacity: 1; }
+.fm b { text-align: right; font-size: 18px; }
+.fm b.up { color: var(--wint); } .fm b.down { color: var(--loset); }
+
+/* ---------- footer ---------- */
+.tips { margin: 24px 20px 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 12px 14px; background: var(--fill); border-top: 2px solid var(--acc); }
+.tips .tl { font-weight: 900; color: var(--acc); letter-spacing: 2px; }
+.tip { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+kbd { font-family: inherit; font-size: 14px; font-weight: 800; color: var(--text); padding: 3px 11px; background: var(--kbd); border: 1px solid var(--fill2); border-bottom-width: 3px; border-radius: 5px; white-space: nowrap; }
+.footer { display: flex; justify-content: space-between; gap: 16px; margin: 14px 20px 16px; font-size: 12px; color: var(--muted); }
+.footer.solo { margin-top: 24px; }
 </style>
 </head>
 <body>
-{% macro strip(imgs) %}<div class="strip">{% for u in imgs %}{% if u is mapping %}<img src="{{ u.src|e }}" class="{{ u.cls|e }}">{% else %}<img src="{{ u|e }}">{% endif %}{% endfor %}</div>{% endmacro %}
-<div class="card">
-  <div class="head">
-    {% if doc.icon %}<img src="{{ doc.icon|e }}"{% if doc.icon_logo %} class="logo"{% endif %}>{% endif %}
-    <div>
-      <h1>{{ doc.title|e }}</h1>
-      {% if doc.subtitle %}<div class="sub">{{ doc.subtitle|e }}</div>{% endif %}
+{% macro items(list) %}<div class="it">{% for u in list %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>{% endmacro %}
+{% macro sr(list) %}<div class="sr">{% for u in list %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>{% endmacro %}
+{% macro tags(list) %}{% for t in list %}<span class="tg {{ t.k|e }}">{{ t.text|e }}</span>{% endfor %}{% endmacro %}
+{% macro chip(b) %}<span class="cp {{ b.cls|e }}">{% if b.img %}<img src="{{ b.img|e }}">{% endif %}{{ b.text|e }}</span>{% endmacro %}
+{% macro strip(imgs) %}<div class="strip">{% for u in imgs %}{% if u is mapping %}{% if 'core' in (u.cls or '').split() %}<span class="cu"><img src="{{ u.src|e }}" class="{{ u.cls|e }}"><i>★</i></span>{% else %}<img src="{{ u.src|e }}" class="{{ u.cls|e }}">{% endif %}{% else %}<img src="{{ u|e }}">{% endif %}{% endfor %}</div>{% endmacro %}
+{% macro tlogo(logo) %}<span class="tlogo">{% if logo %}<img src="{{ logo|e }}">{% endif %}</span>{% endmacro %}
+{% macro sectitle(title, en, esp) %}{% if esp %}<div class="h2"><div class="tab"><b>{{ title|e }}</b>{% if en %}<small>{{ en|e }}</small>{% endif %}</div></div>{% else %}<div class="st"><div><b>{{ title|e }}</b>{% if en %}<small>{{ en|e }}</small>{% endif %}</div></div>{% endif %}{% endmacro %}
+{% macro podium(rows) %}<div class="pod">{% for p in rows %}{% if p %}<div class="pc p{{ p.place }}"><div class="ring">{% if p.icon %}<img src="{{ p.icon|e }}">{% else %}<i>{{ (p.nick or p.name)[:1]|e }}</i>{% endif %}</div><b class="pn2">{{ (p.nick or p.name)|e }}</b><small>{% if p.nick %}{{ p.name|e }}{% endif %}</small><div class="v n">{{ p.v|e }}{% if p.u %}<em>{{ p.u|e }}</em>{% endif %}</div><small>{{ p.sub|e }}</small><div class="base"><span class="n">{{ p.place }}</span></div></div>{% else %}<div class="pc"></div>{% endif %}{% endfor %}</div>{% endmacro %}
+{% macro duelist(P, pos) %}<div class="du-p {{ pos }}">
+  {% if P.icon %}<div class="avb"><div class="avw"><img class="av" src="{{ P.icon|e }}"></div></div>{% endif %}
+  <div class="du-n"><b class="{{ 'zh' if P.zh else 'n' }}" style="font-size: {{ P.fs }}px">{{ P.name|e }}</b>{% if P.sub %}<small>{{ P.sub|e }}</small>{% endif %}{% if P.chips %}<div class="chips">{% for b in P.chips %}{{ chip(b) }}{% endfor %}</div>{% endif %}</div>
+</div>{% endmacro %}
+{% macro vteam(T, pos) %}<div class="vt {{ pos }} {{ T.cls|e }}" style="--tc: {{ T.color|e }}; --tg: {{ T.glow|e }};">
+  <div class="side-b"><div class="blogo">{% if T.logo %}<img src="{{ T.logo|e }}">{% endif %}</div>{% if T.pips %}<div class="ser"><b class="ni">{{ T.series|e }}</b><span class="pips">{% for on in T.pips %}<i class="{{ 'on' if on else '' }}"></i>{% endfor %}</span></div>{% endif %}</div>
+  <div class="tn"><b{% if T.fs %} style="font-size: {{ T.fs }}px"{% endif %}>{{ T.name|e }}</b>{% if T.chips %}<div class="chips">{% for x in T.chips %}<span class="pc2 {{ x.cls|e }}">{{ x.text|e }}</span>{% endfor %}</div>{% endif %}</div>
+</div>{% endmacro %}
+{% set H = doc.hero %}
+{% set esp = doc.theme == 'esports' %}
+{% set nf = 'ni' if esp else 'n' %}
+{% if H.layout == 'versus' %}
+<header class="hero dk vs{{ ' official' if H.art else (' poster' if H.wm else '') }}" style="--lt: {{ H.l.tint|e }}; --rt: {{ H.r.tint|e }}; --lc: {{ H.l.text|e }}; --lg: {{ H.l.glow|e }}; --rc2: {{ H.r.text|e }}; --rg: {{ H.r.glow|e }};">
+  {% if H.art %}<img class="art" src="{{ H.art|e }}">{% elif H.wm %}<img class="wm" src="{{ H.wm|e }}">{% endif %}
+  <div class="eyebrow">{% if H.logo %}<img class="lg" src="{{ H.logo|e }}">{% endif %}<b>{{ H.league|e }}</b><span>{{ H.stage|e }}</span><em>{{ H.when|e }}</em></div>
+  <div class="sb">
+    {{ vteam(H.l, 'l') }}
+    <div class="vmid">
+      {% if H.bo or H.label %}<div class="gb">{% if H.bo %}<span class="bo">{{ H.bo|e }}</span>{% endif %}{% if H.label %}<span class="gn">{{ H.label|e }}</span>{% endif %}</div>{% endif %}
+      {% if H.score %}<div class="kills"><span class="ni kb">{{ H.score[0]|e }}</span><i>:</i><span class="ni kr">{{ H.score[1]|e }}</span></div>{% else %}<div class="kills todo ni">VS</div>{% endif %}
+      {% if H.cap %}<div class="cap">{{ H.cap|e }}</div>{% endif %}
+      {% if H.meta %}<div class="meta">{% for m in H.meta %}<span class="pc2 {{ m.cls|e }}">{{ m.k|e }}{% if m.v %}<b class="ni">{{ m.v|e }}</b>{% endif %}</span>{% endfor %}</div>{% endif %}
     </div>
+    {{ vteam(H.r, 'r') }}
   </div>
-  {% if doc.badges %}
-  <div class="badges">{% for b in doc.badges %}<span class="badge {{ b.cls|e }}">{% if b.img %}<img src="{{ b.img|e }}">{% endif %}{{ b.text|e }}</span>{% endfor %}</div>
-  {% endif %}
-  {% for s in doc.sections %}
-  <div class="sec">
-    {% if s.title %}<h2>{{ s.title|e }}</h2>{% endif %}
-    {% if s.kind == "kv" %}
-      <div class="kv">{% for kv in s.kv %}<div{% if kv[1]|length > 18 %} class="wide"{% endif %}><span>{{ kv[0]|e }}</span><b>{{ kv[1]|e }}</b></div>{% endfor %}</div>
-    {% elif s.kind == "table" %}
-      <table{% if s.widths %} class="fixed"{% endif %}>
-        {% if s.widths %}<colgroup>{% for w in s.widths %}<col style="width: {{ w|e }}">{% endfor %}</colgroup>{% endif %}
-        {% if s.headers %}<tr>{% for h in s.headers %}<th>{{ h|e }}</th>{% endfor %}</tr>{% endif %}
-        {% for row in s.rows %}
-        {% set first = row[0].cls.split() if row else [] %}
-        <tr class="{% if 'me' in first %}rme{% elif 'win' in first or 'rowwin' in first %}rwin{% elif 'lose' in first or 'rowlose' in first %}rlose{% endif %}">
-          {% for cell in row %}
-          {% set classes = cell.cls.split() %}
-          {% set pill = 'op' in classes or 'tp' in classes %}
-          {% set bigstrip = 'bigstrip' in classes %}{% set iconsonly = 'iconsonly' in classes and cell.imgs %}
-          <td class="{% if not pill %}{{ cell.cls|e }}{% endif %}">{% if cell.img %}<img src="{{ cell.img|e }}">{% endif %}{% if not bigstrip %}{% if pill %}<span class="pill {{ cell.cls|e }}">{{ cell.text|e }}</span>{% else %}{{ cell.text|e }}{% endif %}{% if cell.sub and not iconsonly %}<small class="{{ cell.sub_cls|e }}">{{ cell.sub|e }}</small>{% endif %}{% endif %}{% if cell.imgs %}{{ strip(cell.imgs) }}{% endif %}</td>
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </table>
-      {% if s.total > s.rows|length %}<div class="note">共 {{ s.total }} 条，仅显示前 {{ s.rows|length }} 条</div>{% endif %}
-    {% elif s.kind == "list" %}
-      <ul>{% for i in s['items'] %}<li>{{ i|e }}</li>{% endfor %}</ul>
-    {% elif s.kind == "tiles" %}
-      <div class="tiles">{% for t in s.tiles %}
-        <div class="tile {{ t.cls|e }}">{% if t.img %}<img src="{{ t.img|e }}">{% else %}<div class="ph">{{ t.text[:1]|e }}</div>{% endif %}
-          {% if 'rank' in t.cls.split() %}<div><span>{{ t.text|e }}</span>{% if t.sub %}<small>{{ t.sub|e }}</small>{% endif %}</div>{% else %}<span>{{ t.text|e }}</span>{% if t.imgs %}{{ strip(t.imgs) }}{% elif t.sub %}<small>{{ t.sub|e }}</small>{% endif %}{% endif %}</div>
-      {% endfor %}</div>
-    {% elif s.kind == "cards" %}
-      {% for m in s.cards %}
-      <div class="mc {{ m.cls|e }}">
-        <div class="mc-champ">{% if m.champ %}<img src="{{ m.champ|e }}">{% endif %}{% if m.level %}<span class="lv">{{ m.level|e }}</span>{% endif %}<span class="res">{{ m.result|e }}</span></div>
-        <div class="sr">{% for u in m.sr %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>
-        <div>
-          <div class="mc-stats">
-            <div class="mc-kda"><b>{{ m.k }}</b> / <b class="d">{{ m.d }}</b> / <b>{{ m.a }}</b><small><span class="{{ m.ratio_cls|e }}">{{ m.ratio|e }}</span>{% if m.kp %} ({{ m.kp|e }}){% endif %}</small></div>
-            {% if m.share %}<div><b>{{ m.share|e }}</b><small>{{ m.damage|e }} 伤害</small></div>{% else %}<div><b>{{ m.damage|e }}</b><small>伤害</small></div>{% endif %}
-            <div><b>{{ m.cs }}</b> <span class="muted">补兵</span><small>{{ m.cspm|e }} / 分钟</small></div>
-          </div>
-          <div class="mc-items">{% for u in m["items"] %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}{% for t in m.tags %}<span class="tagp {{ t.cls|e }}">{{ t.text|e }}</span>{% endfor %}</div>
-          <div class="mc-foot">{{ m.foot|e }}</div>
-        </div>
-        <div class="mc-pl">{% if m.teams|length == 2 %}{% for i in range([m.teams[0]|length, m.teams[1]|length]|max) %}{% for side in m.teams %}{% if i < side|length %}{% set p = side[i] %}<div class="{{ 'me' if p.me else '' }}">{% if p.icon %}<img src="{{ p.icon|e }}">{% endif %}<span>{{ p.name|e }}</span></div>{% else %}<div></div>{% endif %}{% endfor %}{% endfor %}{% endif %}</div>
+</header>
+{% elif H.layout == 'duel' %}
+<header class="hero dk duel">
+  {% if H.l.art %}<img class="art al" src="{{ H.l.art|e }}">{% endif %}{% if H.r.art %}<img class="art ar" src="{{ H.r.art|e }}">{% endif %}
+  {% if H.eyebrow %}<div class="bt"><small>{{ H.eyebrow|e }}</small></div>{% endif %}
+  <div class="du">
+    {{ duelist(H.l, 'l') }}
+    <div class="du-m"><div class="du-s n"><span class="{{ 'w' if H.score[0] >= H.score[1] else '' }}">{{ H.score[0] }}</span><i>:</i><span class="{{ 'w' if H.score[1] >= H.score[0] else '' }}">{{ H.score[1] }}</span></div>{% if H.cap %}<small>{{ H.cap|e }}</small>{% endif %}</div>
+    {{ duelist(H.r, 'r') }}
+  </div>
+  {% if H.allchips %}<div class="chips">{% for b in H.allchips %}{{ chip(b) }}{% endfor %}</div>{% endif %}
+</header>
+{% elif H.layout == 'center' %}
+<header class="hero dk center{{ '' if H.podium else ' flat' }}{{ ' pair' if H.duo else (' poster' if H.wm and not H.art else '') }}{{ ' wide' if H.wide else '' }}{{ ' vivid' if H.vivid else '' }}"{% if H.pc %} style="--pc: {{ H.pc|e }}"{% endif %}>
+  {% if H.duo and (H.arts or [])|select|list %}{% for a in H.arts %}{% if a %}<img class="art {{ 'al' if loop.first else 'ar' }}" src="{{ a|e }}">{% endif %}{% endfor %}{% elif H.art %}<img class="art" src="{{ H.art|e }}">{% elif H.wm %}<img class="wm" src="{{ H.wm|e }}">{% endif %}
+  <div class="bt">{% if H.slogo %}<img class="slogo" src="{{ H.slogo|e }}">{% elif H.eyebrow %}<small>{{ H.eyebrow|e }}</small>{% endif %}<b style="font-size: {{ H.fs }}px">{{ H.title|e }}</b>{% if H.range %}<span class="{{ 'zh' if H.range_zh else 'n' }}">{{ H.range|e }}</span>{% endif %}</div>
+  {% if H.allchips %}<div class="chips">{% for b in H.allchips %}{{ chip(b) }}{% endfor %}</div>{% endif %}
+  {% if H.podium %}{{ podium(H.podium) }}{% endif %}
+</header>
+{% else %}
+<header class="hero dk{{ ' esp' if esp else '' }}{{ '' if H.stats else ' flat' }}{{ ' poster' if H.wm and not H.art else '' }}{{ ' sided' if H.side else '' }}">
+  {% if H.art %}<img class="art" src="{{ H.art|e }}">{% elif H.wm %}<img class="wm" src="{{ H.wm|e }}">{% endif %}
+  <div class="hrow">
+    <div class="who">
+      {% if H.icon %}<div class="avb"><div class="avw"><img class="av{{ ' logo' if H.logo else '' }}" src="{{ H.icon|e }}"></div>{% if H.level %}<span class="lvl n">{{ H.level|e }}</span>{% endif %}</div>{% endif %}
+      <div>
+        <div class="nm"><b class="{{ 'zh' if H.zh else 'n' }}" style="font-size: {{ H.fs }}px">{{ H.name|e }}</b>{% if H.tag %}<span class="tag {{ 'zh' if H.tag_zh else 'n' }}">{{ H.tag|e }}</span>{% endif %}</div>
+        {% if H.sub %}<div class="hsub">{{ H.sub|e }}</div>{% endif %}
+        {% if H.allchips %}<div class="chips">{% for b in H.allchips %}{{ chip(b) }}{% endfor %}</div>{% endif %}
       </div>
-      {% endfor %}
-      {% if s.total > s.cards|length %}<div class="note">共 {{ s.total }} 场，仅显示前 {{ s.cards|length }} 场</div>{% endif %}
-    {% elif s.kind == "team" %}
-      {% set t = s.team %}
-      <div class="tm {{ t.cls|e }}">
-        <div class="tm-head">{% if t.logo %}<img class="tm-logo" src="{{ t.logo|e }}">{% endif %}<b>{{ t.title|e }}</b><span>{{ t.kda|e }}</span><span class="ob">{% if t.gold_icon %}<img src="{{ t.gold_icon|e }}">{% endif %}{{ t.gold|e }}{% if not t.gold_icon %} 金{% endif %}</span>
-          <span class="obj">{% for o in t.obj_i %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }} {% endif %}<b>{{ o.n }}</b></span>{% endfor %}</span>
-          {% if t.bans %}<span class="bans">禁用 {% for u in t.bans %}{% if u %}<img src="{{ u|e }}">{% else %}<i class="noban"></i>{% endif %}{% endfor %}</span>{% endif %}</div>
-        {% for r in t.rows %}
-        <div class="trow {{ 'me' if r.me else '' }}">
-          <div class="trow-champ">{% if r.champ %}<img src="{{ r.champ|e }}">{% endif %}{% if r.level %}<span class="lv">{{ r.level|e }}</span>{% endif %}</div>
-          <div class="sr">{% for u in r.sr %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>
-          <div class="nm"><b>{{ r.name|e }} <span class="muted">{{ r.tag|e }}</span></b><small>{{ r.pos|e }}{% if r.score %} · 评分 {{ r.score|e }}{% endif %}{% for x in r.tags %}<span class="tagp mini {{ x.cls|e }}">{{ x.text|e }}</span>{% endfor %}</small></div>
-          <div><b>{{ r.kda|e }}</b>{% if r.kp %} <span class="muted">({{ r.kp|e }})</span>{% endif %}<small><span class="{{ r.ratio_cls|e }}">{{ r.ratio|e }} KDA</span></small></div>
-          <div class="bar"><span>{{ r.dmg|e }}</span><div class="track"><i class="o" style="width: {{ r.dmg_w }}%"></i></div><span>{{ r.taken|e }}</span><div class="track"><i class="b" style="width: {{ r.taken_w }}%"></i></div></div>
-          <div><b>{{ r.cs }}</b> <span class="muted">补兵</span><small>{{ r.cspm|e }} / 分钟</small></div>
-          <div><b>{{ r.gold|e }}</b><small>{{ r.goldpm|e }} / 分钟</small></div>
-          <div class="trow-items">{% for u in r["items"] %}{% if u %}<img src="{{ u|e }}">{% else %}<i></i>{% endif %}{% endfor %}</div>
-        </div>
-        {% endfor %}
-      </div>
-    {% elif s.kind == "runes" %}
-      {% set b = s.block %}
-      <div class="rp">
-        <div class="rp-tree">
-          <div class="rp-head">{% if b.primary.icon %}<img src="{{ b.primary.icon|e }}">{% endif %}<b>{{ b.primary.name|e }}</b><span>主系</span></div>
-          <div class="rp-body">
-          {% if b.primary.keystone %}<div class="rp-key">{% if b.primary.keystone.icon %}<img src="{{ b.primary.keystone.icon|e }}">{% endif %}<span>{{ b.primary.keystone.name|e }}</span></div>{% endif %}
-          <div class="rp-row">{% for r in b.primary.runes %}<div class="rp-r">{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}{{ r.name|e }}</div>{% endfor %}</div>
-          </div>
-        </div>
-        <div class="rp-tree">
-          <div class="rp-head">{% if b.secondary.icon %}<img src="{{ b.secondary.icon|e }}">{% endif %}<b>{{ b.secondary.name|e }}</b><span>副系</span></div>
-          <div class="rp-body">
-          <div class="rp-row">{% for r in b.secondary.runes %}<div class="rp-r">{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}{{ r.name|e }}</div>{% endfor %}</div>
-          {% if b.shards %}<div class="rp-shards">{% for x in b.shards %}<div class="rp-s">{% if x.icon %}<img src="{{ x.icon|e }}">{% endif %}{{ x.name|e }}</div>{% endfor %}</div>{% endif %}
-          </div>
-        </div>
-      </div>
-      {% if b.stats %}<div class="note">{{ b.stats|e }}</div>{% endif %}
-    {% elif s.kind == "skills" %}
-      {% set b = s.block %}
-      <div class="sk-top">
-        {% if b.spells %}<div class="sk-sp"><span class="lbl">召唤师技能</span>{% for x in b.spells %}{% if x.icon %}<img src="{{ x.icon|e }}">{% endif %}{% endfor %}{% if b.spells_pick %}<small>{{ b.spells_pick|e }}</small>{% endif %}</div>{% endif %}
-        {% if b.max %}<div class="sk-max"><span class="lbl">主升</span>{% for m in b.max %}<span class="sk-k">{% if m.icon %}<img src="{{ m.icon|e }}">{% endif %}<b>{{ m.key|e }}</b></span>{% if not loop.last %}<i class="arr">›</i>{% endif %}{% endfor %}{% if b.max_pick %}<small>{{ b.max_pick|e }}</small>{% endif %}</div>{% endif %}
-      </div>
-      {% if b.length %}
-      <div class="sk-grid" style="grid-template-columns: 40px repeat({{ b.length }}, 1fr);">
-        {% for row in b.grid %}<div class="sk-lbl">{% if row.icon %}<img src="{{ row.icon|e }}">{% endif %}<b>{{ row.key|e }}</b></div>{% for lv in row.levels %}<div class="sk-c{% if lv %} k-{{ row.key|e }}{% endif %}">{% if lv %}{{ lv }}{% endif %}</div>{% endfor %}{% endfor %}
-      </div>
-      {% endif %}
-    {% elif s.kind == "iconrows" %}
-      {% for r in s.block.rows %}
-      <div class="ir"><span class="ir-l">{{ r.label|e }}</span>{% for it in r['items'] %}<div class="ir-i">{% if it.icon %}<img src="{{ it.icon|e }}">{% endif %}<div><b>{{ it.name|e }}</b><small class="{{ it.cls|e }}">{{ it.sub|e }}</small></div></div>{% endfor %}</div>
-      {% endfor %}
-    {% elif s.kind == "versus" %}
-      {% for v in s.block.rows %}
-      <div class="vs">
-        <div class="vs-top">{% if v.no %}<span class="vs-no">#{{ v.no }}</span>{% endif %}{{ v.time|e }}<b class="vs-lg"{% if v.league_color %} style="color: {{ v.league_color|e }}"{% endif %}>{% if v.league_icon %}<img src="{{ v.league_icon|e }}">{% endif %}{{ v.league|e }}</b>{{ v.stage|e }}</div>
-        <div class="vs-t h{% if v.home.win %} win{% elif v.home.lose %} lose{% endif %}"><span class="vs-n">{{ v.home.name|e }}</span><span class="vs-logo">{% if v.home.logo %}<img src="{{ v.home.logo|e }}">{% endif %}</span></div>
-        <div class="vs-m"><span class="vs-s {{ v.score_cls|e }}">{{ v.score|e }}</span><div class="vs-sub">{{ v.bo|e }}{% if v.bo %} · {% endif %}<span class="{{ v.score_cls|e }}">{{ v.state|e }}</span></div></div>
-        <div class="vs-t a{% if v.away.win %} win{% elif v.away.lose %} lose{% endif %}"><span class="vs-logo">{% if v.away.logo %}<img src="{{ v.away.logo|e }}">{% endif %}</span><span class="vs-n">{{ v.away.name|e }}</span></div>
-      </div>
-      {% endfor %}
-    {% elif s.kind == "series" %}
-      {% for r in s.block.rows %}
-      {% set H = r.home %}{% set A = r.away %}
-      <div class="sg">
-        <div class="sg-row">
-          <div class="sg-side h{% if H.win %} win{% elif H.lose %} lose{% endif %}"><div class="sg-ch">{% for ch in H.champs %}<div class="sg-c{% if ch.mvp %} mvp{% endif %}">{% if ch.icon %}<img src="{{ ch.icon|e }}">{% endif %}<small>{{ ch.name|e }}</small></div>{% endfor %}</div><div class="sg-k">{{ H.kills }}</div></div>
-          <div class="sg-m"><b>{{ r.no|e }}</b><span class="{{ 'live' if r.live else '' }}">{% if r.live %}进行中 · {% endif %}{{ r.dur|e }}</span></div>
-          <div class="sg-side a{% if A.win %} win{% elif A.lose %} lose{% endif %}"><div class="sg-k">{{ A.kills }}</div><div class="sg-ch">{% for ch in A.champs %}<div class="sg-c{% if ch.mvp %} mvp{% endif %}">{% if ch.icon %}<img src="{{ ch.icon|e }}">{% endif %}<small>{{ ch.name|e }}</small></div>{% endfor %}</div></div>
-        </div>
-        <div class="sg-foot">
-          <div class="h">{% for o in H.obj %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }}{% endif %}<b>{{ o.n }}</b></span>{% endfor %}<span class="ob"><img src="{{ H.gold_icon|e }}"><b>{{ H.gold|e }}</b></span><span class="sg-tag {{ 'blue' if H.side == '蓝方' else 'red' }}">{{ H.side|e }}</span></div>
-          <div class="sg-mvp">{% if r.mvp %}{% if r.mvp.icon %}<img src="{{ r.mvp.icon|e }}">{% endif %}<b>MVP</b>{{ r.mvp.name|e }} {{ r.mvp.kda|e }}{% endif %}</div>
-          <div class="a"><span class="sg-tag {{ 'blue' if A.side == '蓝方' else 'red' }}">{{ A.side|e }}</span>{% for o in A.obj %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }}{% endif %}<b>{{ o.n }}</b></span>{% endfor %}<span class="ob"><img src="{{ A.gold_icon|e }}"><b>{{ A.gold|e }}</b></span></div>
-        </div>
-      </div>
-      {% endfor %}    {% elif s.kind == "text" %}
-      <div class="text">{{ s.text|e }}</div>
+    </div>
+    {% set S = H.side %}
+    {% if S and S.kind == 'rank' %}
+    <div class="rk">{% if S.emblem %}<img src="{{ S.emblem|e }}">{% endif %}<div><small>{{ S.queue|e }}</small><b class="tier">{{ S.tier|e }}</b>{% if S.lp %}<span class="lp n">{{ S.lp|e }}<em>LP</em></span>{% endif %}<span class="wl">{{ S.wl|e }}</span>{% if S.wr %}<div class="bar"><i style="width: {{ S.wr|e }}%"></i></div>{% endif %}{% if S.alt %}<div class="alt">{% if S.alt.img %}<img src="{{ S.alt.img|e }}">{% endif %}{{ S.alt.text|e }}</div>{% endif %}</div></div>
+    {% elif S and S.big %}
+    <div class="bigb {{ S.cls|e }}">{% if S.small %}<small>{{ S.small|e }}</small>{% endif %}<b class="{{ 'zh' if S.zh else 'n' }}">{{ S.big|e }}</b>{% if S.sub %}<span>{{ S.sub|e }}</span>{% endif %}</div>
     {% endif %}
-    {% if s.note %}<div class="note">{{ s.note|e }}</div>{% endif %}
+  </div>
+  {% if H.stats %}<div class="ss">{% for x in H.stats %}<div>{% if x.streak %}<div class="streak">{% for w in x.streak %}<i class="{{ w|e }}">{{ '胜' if w == 'w' else ('负' if w == 'l' else '重') }}</i>{% endfor %}</div>{% elif x.icons %}<div class="mains">{% for u in x.icons %}{% if u %}<img src="{{ u|e }}">{% endif %}{% endfor %}</div>{% elif x.kda %}<b class="n">{{ x.kda[0] }}<i>/</i><span class="d">{{ x.kda[1] }}</span><i>/</i>{{ x.kda[2] }}</b>{% elif x.parts %}<b class="n">{% for p in x.parts %}{{ p[0]|e }}<em>{{ p[1]|e }}</em>{% endfor %}</b>{% else %}<b class="n {{ x.cls|e }}">{{ x.v|e }}{% if x.u %}<em>{{ x.u|e }}</em>{% endif %}</b>{% endif %}<small>{{ x.k|e }}</small></div>{% endfor %}</div>{% endif %}
+</header>
+{% endif %}
+{% for s in doc.sections if s.style != 'hide' %}
+<section class="sec{{ ' t' if s.title else '' }}">
+{% if s.title %}{{ sectitle(s.title, s.en, esp) }}{% endif %}
+{% if s.kind == 'kv' %}
+  <div class="wrap kvs">{% for kv in s.kv %}<div class="kv{{ ' wide' if kv[1]|length > 18 else '' }}"><small>{{ kv[0]|e }}</small><b>{{ kv[1]|e }}</b></div>{% endfor %}</div>
+{% elif s.kind == 'table' and s.style == 'standings' %}{% set nc = (s.headers|length - 2) if s.headers|length > 2 else 3 %}
+  <div class="stg-h" style="--nc: {{ nc }}">{% for h in s.headers %}<span>{{ h|e }}</span>{% endfor %}</div>
+  {% for row in s.rows %}{% set rk = row[0].text %}
+  <div class="stg{{ (' p' ~ rk) if rk in ('1', '2', '3') else '' }}" style="--nc: {{ nc }}">
+    <b class="stg-rk ni {{ row[0].cls|e }}">{{ rk|e }}</b>
+    <div class="stg-t">{{ tlogo(row[1].img) }}<div><b>{{ row[1].text|e }}</b>{% if row[1].sub and row[1].sub != row[1].text %}<small>{{ row[1].sub|e }}</small>{% endif %}</div></div>
+    {% for c in row[2:] %}<div class="stg-c{{ ' last' if loop.last else '' }}"><b class="ni{{ ' neg' if loop.last and c.text.startswith('-') else '' }}">{{ c.text|e }}</b>{% if c.pct is defined %}<i class="bar"><i style="width: {{ c.pct }}%"></i></i>{% endif %}</div>{% endfor %}
+  </div>{% endfor %}
+{% elif s.kind == 'table' %}
+  {% if s.tops %}<div class="wrap tops {{ s.style|e }}">{% for t in s.tops %}<div class="tc{{ ' g1' if t.rank.text == '1' else '' }}">
+    <div class="tc-rk"><b class="n {{ t.rank.cls|e }}">{{ t.rank.text|e }}</b>{% if t.rank.sub %}<small class="{{ t.rank.sub_cls|e }}">{{ t.rank.sub|e }}</small>{% endif %}</div>
+    {% if t.ent.img %}<img src="{{ t.ent.img|e }}">{% elif t.ent.imgs %}{{ strip(t.ent.imgs) }}{% endif %}<b class="tc-n">{{ t.ent.text|e }}</b>
+    {% if t.pill %}<span class="pill {{ t.pill.cls|e }}">{{ t.pill.text|e }}</span>{% endif %}
+    <div class="tc-s">{% for x in t.stats %}<div><b class="n {{ x.cls|e }}">{{ x.v|e }}</b><small>{{ x.k|e }}</small></div>{% endfor %}</div>
+  </div>{% endfor %}</div>{% endif %}
+  {% if s.rows %}<div class="wrap"><table class="tb{{ ' fixed' if s.widths else '' }}">
+    {% if s.widths %}<colgroup>{% for w in s.widths %}<col style="width: {{ w|e }}">{% endfor %}</colgroup>{% endif %}
+    {% if s.headers and s.headers|select|list %}<tr>{% for h in s.headers %}<th>{{ h|e }}</th>{% endfor %}</tr>{% endif %}
+    {% for row in s.rows %}{% set first = row[0].cls.split() if row else [] %}
+    <tr class="{% if 'me' in first %}rme{% elif 'win' in first or 'rowwin' in first %}rwin{% elif 'lose' in first or 'rowlose' in first %}rlose{% endif %}">{% for cell in row %}{% set classes = cell.cls.split() %}{% set pill = 'op' in classes or 'tp' in classes %}{% set big = 'bigstrip' in classes %}{% set iconsonly = 'iconsonly' in classes and cell.imgs %}
+      <td class="{% if not pill %}{{ cell.cls|e }}{% endif %}{{ ' n' if cell.n else '' }}">{% if cell.img %}<div class="cl"><img src="{{ cell.img|e }}"><div>{% endif %}{% if not big %}{% if pill %}<span class="pill {{ cell.cls|e }}">{{ cell.text|e }}</span>{% else %}{{ cell.text|e }}{% endif %}{% if cell.sub and not iconsonly %}<small class="{{ cell.sub_cls|e }}">{{ cell.sub|e }}</small>{% endif %}{% endif %}{% if cell.imgs %}{{ strip(cell.imgs) }}{% endif %}{% if cell.img %}</div></div>{% endif %}</td>{% endfor %}
+    </tr>{% endfor %}
+  </table></div>{% endif %}
+  {% if s.total > s.rows|length %}<div class="note">共 {{ s.total }} 条，仅显示前 {{ s.rows|length }} 条</div>{% endif %}
+{% elif s.kind == 'list' %}
+  <div class="wrap pn"><ul>{% for i in s['items'] %}<li>{{ i|e }}</li>{% endfor %}</ul></div>
+{% elif s.kind == 'tiles' %}
+  {% if s.style == 'flow' %}
+  <div class="wrap pn">
+    <div class="flow">{% for g in s.groups %}{% if not loop.first %}<span class="arr">›</span>{% endif %}<div class="grp{{ ' core' if g.core else '' }}">{% if g.label %}<small>{{ g.label|e }}</small>{% endif %}<div class="its">{% for t in g['items'] %}<div class="itm">{% if t.img %}<img src="{{ t.img|e }}">{% endif %}<span>{{ t.text|e }}</span></div>{% endfor %}</div></div>{% endfor %}</div>
+    {% if s.note %}<div class="meta">{% for m in s.note.split(' · ') %}<span class="cp">{{ m|e }}</span>{% endfor %}</div>{% endif %}
+    {% for r in s.follow %}<div class="folrow"><div class="fol-l">{{ r.label|e }}</div><div class="fol">{% for it in r['items'] %}<div>{% if it.icon %}<img src="{{ it.icon|e }}">{% endif %}<span>{{ it.name|e }}</span><b class="n">{{ it.sub|e }}</b></div>{% endfor %}</div></div>{% endfor %}
+  </div>
+  {% elif s.style == 'medals' %}
+  <div class="wrap mds">{% for t in s.tiles %}<div class="md {{ t.cls|e }}"><div class="mi">{% if t.img %}<img src="{{ t.img|e }}">{% endif %}{% if t.emoji %}<i>{{ t.emoji|e }}</i>{% endif %}</div><b>{{ t.name|e }}</b>{% set sp = t.sub.split(' · ', 1) %}<small class="who">{{ sp[0]|e }}</small>{% if sp|length > 1 %}<small>{{ sp[1]|e }}</small>{% endif %}</div>{% endfor %}</div>
+  {% else %}
+  <div class="wrap pn"><div class="tiles">{% for t in s.tiles %}<div class="tile {{ t.cls|e }}">{% if t.img %}<img src="{{ t.img|e }}">{% else %}<div class="ph">{{ t.text[:1]|e }}</div>{% endif %}{% if 'rank' in t.cls.split() %}<div><span>{{ t.text|e }}</span>{% if t.sub %}<small>{{ t.sub|e }}</small>{% endif %}</div>{% else %}<span>{{ t.text|e }}</span>{% if t.imgs %}{{ strip(t.imgs) }}{% elif t.sub %}<small>{{ t.sub|e }}</small>{% endif %}{% endif %}</div>{% endfor %}</div></div>
+  {% endif %}
+{% elif s.kind == 'cards' %}
+  {% for m in s.cards %}{% set duo = m.teams and m.teams|length == 2 %}
+  <div class="mr {{ m.cls|e }}{{ '' if duo else ' solo' }}">
+    <div class="res"><b>{{ m.result|e }}</b><span class="n">{{ m.dur|e }}</span><small class="q">{{ m.queue|e }}</small><small>{{ m.ago|e }}</small></div>
+    <div class="ch">{% if m.champ %}<img src="{{ m.champ|e }}">{% endif %}{% if m.level %}<span class="lv n">{{ m.level|e }}</span>{% endif %}</div>
+    {{ sr(m.sr) }}
+    <div>
+      <div class="l1">
+        <div class="kda"><b class="n">{{ m.k }}<i>/</i><em>{{ m.d }}</em><i>/</i>{{ m.a }}</b><small><span class="n {{ m.ratio_cls|e }}">{{ m.ratio|e }}</span> KDA{% if m.kp %} · 参团 {{ m.kp|e }}{% endif %}</small></div>
+        <div class="dm"><b class="n">{{ m.damage|e }}</b><div class="bar"><i style="width: {{ m.share_w }}%"></i></div><small>{% if m.share %}伤害占比 {{ m.share|e }}{% else %}伤害{% endif %}</small></div>
+        <div class="cs"><b class="n">{{ m.cs }}</b><small>补兵 · {{ m.cspm|e }}/分</small></div>
+        <div class="scw">{% if m.score %}<span class="sc {{ m.score_cls|e }} n">{{ m.score|e }}</span><small>评分{% if m.score_rank %} · 第 {{ m.score_rank }}{% endif %}</small>{% endif %}</div>
+      </div>
+      <div class="l2">{{ items(m['items']) }}<div class="tags">{{ tags(m.tags) }}</div></div>
+    </div>
+    {% if duo %}<div class="pl">{% for i in range([m.teams[0]|length, m.teams[1]|length]|max) %}{% for side in m.teams %}{% if i < side|length %}{% set p = side[i] %}<div class="{{ 'me' if p.me else '' }}">{% if p.icon %}<img src="{{ p.icon|e }}">{% endif %}<span>{{ p.name|e }}</span></div>{% else %}<div></div>{% endif %}{% endfor %}{% endfor %}</div>{% endif %}
   </div>
   {% endfor %}
-  {% if doc.tips %}
-  <div class="tips"><span class="tips-l">试试</span>{% for t in doc.tips %}<span class="tip"><code>{{ t.cmd|e }}</code>{% if t.desc %}<small>{{ t.desc|e }}</small>{% endif %}</span>{% endfor %}</div>
+  {% if s.total > s.cards|length %}<div class="note">共 {{ s.total }} 场，仅显示前 {{ s.cards|length }} 场</div>{% endif %}
+{% elif s.kind == 'team' %}{% set t = s.team %}
+  <div class="team {{ t.side or 'none' }}">
+    <div class="tbar dk">
+      {% if t.logo %}<img class="tl" src="{{ t.logo|e }}">{% endif %}{% if t.name and t.name != t.side_zh %}<b class="tn2{{ ' zh' if t.name_zh else '' }}">{{ t.name|e }}</b>{% endif %}
+      {% if t.side_zh %}<span class="pc2 {{ t.side|e }}">{{ t.side_zh|e }}</span>{% endif %}<span class="pc2 {{ 'win' if t.win else 'lose' }}">{{ '胜利' if t.win else '失败' }}</span>
+      <span class="tk {{ nf }}">{{ t.kda|e }}</span>
+      <span class="tgd">{% if t.gold_icon %}<img src="{{ t.gold_icon|e }}">{% endif %}<b class="{{ nf }}">{{ t.gold_full|e }}</b></span>
+      <span class="to">{% for o in t.obj_i %}{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}<small>{{ o.label|e }}</small>{% endif %}<b class="{{ nf }}">{{ o.n }}</b>{% endfor %}</span>
+      {% if t.bans %}<span class="bans"><small>禁用</small>{% for u in t.bans %}<i>{% if u %}<img src="{{ u|e }}">{% endif %}</i>{% endfor %}</span>{% endif %}
+    </div>
+    {% for r in t.rows %}
+    <div class="pr{{ ' me' if r.me else '' }}{{ ' pmvp' if r.mvp and not r.me else '' }}{{ ' pace' if r.ace and not r.me else '' }}">
+      {% if r.role %}<img class="role" src="{{ r.role|e }}">{% else %}<i></i>{% endif %}
+      <div class="ch">{% if r.champ %}<img src="{{ r.champ|e }}">{% endif %}{% if r.level %}<span class="lv n">{{ r.level|e }}</span>{% endif %}</div>
+      {{ sr(r.sr) }}
+      <div class="nm2"><b class="{{ 'zh' if r.name_zh else '' }}">{{ r.name|e }}</b><div class="tags">{% if r.score %}<span class="sc {{ r.score_cls|e }} n">{{ r.score|e }}</span>{% endif %}{{ tags(r.tags) }}</div></div>
+      <div class="kda"><b class="{{ nf }}">{{ r.k }}<i>/</i><em>{{ r.d }}</em><i>/</i>{{ r.a }}</b><small><span class="n {{ r.ratio_cls|e }}">{{ r.ratio|e }}</span>{% if r.kp %} · 参团 {{ r.kp|e }}{% endif %}</small></div>
+      <div class="dm"><b class="{{ nf }}">{{ r.dmg|e }}</b><div class="b1"><i style="width: {{ r.dmg_w }}%"></i></div><div class="b2"><i style="width: {{ r.taken_w }}%"></i></div><small>承伤 {{ r.taken|e }}</small></div>
+      <div class="cs"><b class="{{ nf }}">{{ r.cs }}</b><small>{{ r.cspm|e }}/分</small></div>
+      <div class="gd"><b class="{{ nf }}">{{ r.gold_full|e }}</b><small>{{ r.goldpm|e }}/分</small></div>
+      {{ items(r['items']) }}
+    </div>
+    {% endfor %}
+  </div>
+{% elif s.kind == 'runes' %}{% set b = s.block %}
+  <div class="wrap g2">
+    <div class="pn"><h3>{% if b.primary.icon %}<img src="{{ b.primary.icon|e }}">{% endif %}{{ b.primary.name|e }}<small>主系</small></h3>
+      <div class="rbody">{% if b.primary.keystone %}<div class="key">{% if b.primary.keystone.icon %}<img src="{{ b.primary.keystone.icon|e }}">{% endif %}<span>{{ b.primary.keystone.name|e }}</span></div>{% endif %}
+        <div class="rr">{% for r in b.primary.runes %}<div>{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}{{ r.name|e }}</div>{% endfor %}</div></div></div>
+    <div class="pn"><h3>{% if b.secondary.icon %}<img src="{{ b.secondary.icon|e }}">{% endif %}{{ b.secondary.name|e }}<small>副系</small></h3>
+      <div class="rbody"><div class="rr">{% for r in b.secondary.runes %}<div>{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}{{ r.name|e }}</div>{% endfor %}</div>
+        {% if b.shards %}<div class="sh">{% for x in b.shards %}<div>{% if x.icon %}<img src="{{ x.icon|e }}">{% endif %}{{ x.name|e }}</div>{% endfor %}</div>{% endif %}</div></div>
+  </div>
+  {% if b.stats %}<div class="meta">{% for m in b.stats.split(' · ') %}<span class="cp">{{ m|e }}</span>{% endfor %}</div>{% endif %}
+{% elif s.kind == 'skills' %}{% set b = s.block %}
+  <div class="wrap pn">
+    <div class="sk-top">
+      {% if b.spells %}<div class="sp"><span class="lb">召唤师技能</span>{% for x in b.spells %}{% if x.icon %}<img src="{{ x.icon|e }}">{% endif %}{% endfor %}{% if b.spells_pick %}<b class="pk n">{{ b.spells_pick|e }}</b>{% endif %}</div>{% endif %}
+      {% if b.max %}<div class="mx"><span class="lb">主升顺序</span>{% for m in b.max %}<span class="kk">{% if m.icon %}<img src="{{ m.icon|e }}">{% endif %}<b class="n">{{ m.key|e }}</b></span>{% if not loop.last %}<i class="ar">›</i>{% endif %}{% endfor %}{% if b.max_pick %}<b class="pk n">{{ b.max_pick|e }}</b>{% endif %}</div>{% endif %}
+    </div>
+    {% if b.length %}<div class="skg" style="grid-template-columns: 44px repeat({{ b.length }}, 1fr);">{% for row in b.grid %}<div class="sl">{% if row.icon %}<img src="{{ row.icon|e }}">{% endif %}<b class="n">{{ row.key|e }}</b></div>{% for lv in row.levels %}<div class="sc2 n{% if lv %} k-{{ row.key|e }}{% endif %}">{% if lv %}{{ lv }}{% endif %}</div>{% endfor %}{% endfor %}</div>{% endif %}
+  </div>
+{% elif s.kind == 'iconrows' %}
+  {% if s.style == 'matchup' %}
+  <div class="wrap g2">{% for grp in s.block.rows %}{% set bad = grp['items'] and grp['items'][0].cls == 'lose' %}<div class="pn"><h3><i class="dot" style="background: var(--{{ 'lose' if bad else 'win' }})"></i>{{ grp.label|e }}<small>对位胜率</small></h3>
+    {% for it in grp['items'] %}<div class="mu {{ it.cls|e }}">{% if it.icon %}<img src="{{ it.icon|e }}">{% else %}<i></i>{% endif %}<span>{{ it.name|e }}</span><div class="b"><i style="width: {{ it.w }}%"></i></div><b class="n">{{ it.pct|e }}</b></div>{% endfor %}
+  </div>{% endfor %}</div>
+  {% else %}
+  <div class="wrap pn">{% for r in s.block.rows %}<div class="ir"><span class="ir-l">{{ r.label|e }}</span>{% for it in r['items'] %}<div class="ir-i">{% if it.icon %}<img src="{{ it.icon|e }}">{% endif %}<div><b>{{ it.name|e }}</b><small class="{{ it.cls|e }}">{{ it.sub|e }}</small></div></div>{% endfor %}</div>{% endfor %}</div>
   {% endif %}
-  <div class="foot"><span>{{ doc.footer|e }}</span><span>联盟助手 · 数据来源 {% if 'WeGame' in doc.footer %}WeGame{% elif doc.theme == 'cn' %}国服客户端{% else %}OP.GG{% endif %}</span></div>
-</div>
+{% elif s.kind == 'versus' %}
+  {% for v in s.block.rows %}
+  <div class="vsr{{ ' live' if v.score_cls == 'live' else '' }}">
+    <div class="vsr-top">{% if v.no %}<span class="no n">#{{ v.no }}</span>{% endif %}<span class="n">{{ v.time|e }}</span>{% if v.league_icon %}<img src="{{ v.league_icon|e }}">{% endif %}<b>{{ v.league|e }}</b>{% if v.stage %}<span>{{ v.stage|e }}</span>{% endif %}</div>
+    <div class="vsr-row">
+      <div class="vsr-t h{{ ' win' if v.home.win else '' }}{{ ' lose' if v.home.lose else '' }}"><b>{{ v.home.name|e }}</b>{{ tlogo(v.home.logo) }}</div>
+      <div class="vsr-m">{% if v.score_cls == 'todo' %}<div class="vsr-vs {{ nf }}">VS</div>{% else %}<div class="vsr-s {{ nf }}"><span class="a {{ 'l' if v.home.lose else 'w' }}">{{ v.sh }}</span><i>:</i><span class="b {{ 'l' if v.away.lose else 'w' }}">{{ v.sa }}</span></div>{% endif %}
+        <div class="vsr-sub">{% if v.bo %}<span>{{ v.bo|e }}</span>{% endif %}{% if v.score_cls == 'live' %}<span class="pc2 live">进行中</span>{% elif v.score_cls == 'todo' %}<span>未开始</span>{% else %}<span>已结束</span>{% endif %}{% for x in v.extra %}<span class="pc2 {{ x.cls|e }}">{{ x.k|e }}{% if x.v %}<b class="n">{{ x.v|e }}</b>{% endif %}</span>{% endfor %}</div></div>
+      <div class="vsr-t a{{ ' win' if v.away.win else '' }}{{ ' lose' if v.away.lose else '' }}">{{ tlogo(v.away.logo) }}<b>{{ v.away.name|e }}</b></div>
+    </div>
+  </div>
+  {% endfor %}
+{% elif s.kind == 'series' %}
+  {% for r in s.block.rows %}{% set HM = r.home %}{% set AW = r.away %}
+  <div class="sg" style="--hc: var(--{{ HM.color|e }}); --ac: var(--{{ AW.color|e }});">
+    <div class="sg-row">
+      <div class="sg-side h{{ ' win' if HM.win else '' }}{{ ' lose' if HM.lose else '' }}"><div class="sg-ch">{% for ch in HM.champs %}<div class="sg-c{{ ' mvp' if ch.mvp else '' }}">{% if ch.icon %}<img src="{{ ch.icon|e }}">{% endif %}<small>{{ ch.name|e }}</small></div>{% endfor %}</div><div class="sg-k ni">{{ HM.kills }}</div></div>
+      <div class="sg-m"><b>{{ r.no|e }}</b>{% if r.live %}<span class="live">进行中</span>{% endif %}<span class="ni">{{ r.dur|e }}</span></div>
+      <div class="sg-side a{{ ' win' if AW.win else '' }}{{ ' lose' if AW.lose else '' }}"><div class="sg-k ni">{{ AW.kills }}</div><div class="sg-ch">{% for ch in AW.champs %}<div class="sg-c{{ ' mvp' if ch.mvp else '' }}">{% if ch.icon %}<img src="{{ ch.icon|e }}">{% endif %}<small>{{ ch.name|e }}</small></div>{% endfor %}</div></div>
+    </div>
+    <div class="sg-foot">
+      <div class="h">{% if HM.win %}<span class="pc2 win">胜利</span>{% endif %}{% for o in HM.obj %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }}{% endif %}<b class="ni">{{ o.n }}</b></span>{% endfor %}<span class="ob">{% if HM.gold_icon %}<img src="{{ HM.gold_icon|e }}">{% endif %}<b class="ni">{{ HM.gold|e }}</b></span><span class="pc2 {{ HM.color|e }}">{{ HM.side|e }}</span></div>
+      <div class="sg-mvp">{% if r.mvp %}<span class="tg mvp">MVP</span>{% if r.mvp.icon %}<img src="{{ r.mvp.icon|e }}">{% endif %}<b>{{ r.mvp.name|e }}</b><span class="ni">{{ r.mvp.kda|e }}</span>{% endif %}</div>
+      <div class="a"><span class="pc2 {{ AW.color|e }}">{{ AW.side|e }}</span><span class="ob">{% if AW.gold_icon %}<img src="{{ AW.gold_icon|e }}">{% endif %}<b class="ni">{{ AW.gold|e }}</b></span>{% for o in AW.obj %}<span class="ob">{% if o.icon %}<img src="{{ o.icon|e }}">{% else %}{{ o.label|e }}{% endif %}<b class="ni">{{ o.n }}</b></span>{% endfor %}{% if AW.win %}<span class="pc2 win">胜利</span>{% endif %}</div>
+    </div>
+  </div>
+  {% endfor %}
+{% elif s.kind == 'esstats' %}{% set b = s.block %}
+  <div class="duo">
+    <div class="panel"><div class="h2 in"><div class="tab"><b>数据对比</b><small>TEAM STATS</small></div></div>
+      {% for r in b.cmp %}<div class="cr"><b class="ni{{ ' lead' if r.lead == 'l' else '' }}">{{ r.l|e }}</b><div class="c"><small>{{ r.label|e }}</small><div class="cbar"><i class="bb" style="width: {{ r.lp }}%"></i><i class="rb" style="width: {{ 100 - r.lp }}%"></i></div></div><b class="ni r{{ ' lead' if r.lead == 'r' else '' }}">{{ r.r|e }}</b></div>{% endfor %}
+      {% if b.firsts %}<div class="fs">{% for f in b.firsts %}<span class="f {{ f.side|e }}">{% if f.icon %}<img src="{{ f.icon|e }}">{% endif %}<b>{{ f.label|e }}</b><small>{{ f.who|e }}</small></span>{% endfor %}</div>{% endif %}
+    </div>
+    {% if b.mom %}<div class="panel mom"><div class="h2 in"><div class="tab"><b>局势走向</b><small>MOMENTUM</small></div></div>
+      <div class="mom-body">{{ b.mom.svg|safe }}
+        <div class="leads"><div class="ld blue"><small>蓝队领先时长</small><b class="ni">{{ b.mom.blue.min }}′</b><span>最大 {{ b.mom.blue.max|e }}{% if b.mom.blue.at %}（{{ b.mom.blue.at }}′）{% endif %}</span></div>
+          <div class="ld red"><small>红队领先时长</small><b class="ni">{{ b.mom.red.min }}′</b><span>最大 {{ b.mom.red.max|e }}{% if b.mom.red.at %}（{{ b.mom.red.at }}′）{% endif %}</span></div></div>
+        <div class="mnote">OP.GG 实时评分 · 两队平均分差</div></div></div>{% endif %}
+  </div>
+{% elif s.kind == 'mvp' %}{% set b = s.block %}
+  <div class="mvpc dk" style="--sc: var(--{{ b.color|e }})">
+    {% if b.art %}<img class="art" src="{{ b.art|e }}">{% endif %}
+    <div class="mv"><span class="mv-tag">MVP</span><div class="mv-name">{{ b.name|e }}</div>
+      <div class="mv-sub">{% if b.logo %}<img src="{{ b.logo|e }}">{% endif %}{{ b.team|e }}{% if b.side_zh %}<span class="pc2 {{ b.color|e }}">{{ b.side_zh|e }}</span>{% endif %}{{ b.desc|e }}</div>
+      <div class="mv-stats">{% for x in b.stats %}<div><b class="ni">{{ x.v|e }}</b><small>{{ x.k|e }}</small></div>{% endfor %}</div></div>
+  </div>
+{% elif s.kind == 'podium' %}
+  <div class="wrap dk podbox">{{ podium(s.block.slots) }}</div>
+{% elif s.kind == 'boards' %}
+  <div class="wrap pn">{% for bd in s.block.boards %}<div class="lbr"><div class="bn">{% if bd.icon %}<i>{{ bd.icon|e }}</i>{% endif %}<div>{{ bd.name|e }}{% if bd.hint %}<small>{{ bd.hint|e }}</small>{% endif %}</div></div>{% for i in range(3) %}{% if i < bd.rows|length %}{% set r = bd.rows[i] %}<div class="e"><i class="rk2 n r{{ i + 1 }}">{{ i + 1 }}</i>{% if r.icon %}<img src="{{ r.icon|e }}">{% endif %}<span>{{ r.name|e }}</span><b class="n">{{ r.v|e }}{% if r.u %}<em>{{ r.u|e }}</em>{% endif %}</b></div>{% else %}<div></div>{% endif %}{% endfor %}</div>{% endfor %}</div>
+{% elif s.kind == 'pk' %}{% set HD = s.block.heads %}
+  <div class="wrap pn">
+    {% if H.layout != 'duel' %}<div class="pk-h"><div class="pk-p">{% if HD[0].icon %}<img src="{{ HD[0].icon|e }}">{% endif %}<div><b>{{ HD[0].name|e }}</b><small>{{ HD[0].record|e }} · {{ HD[0].sub|e }}</small></div></div><div class="pk-vs n">VS</div><div class="pk-p r">{% if HD[1].icon %}<img src="{{ HD[1].icon|e }}">{% endif %}<div><b>{{ HD[1].name|e }}</b><small>{{ HD[1].record|e }} · {{ HD[1].sub|e }}</small></div></div></div>{% endif %}
+    {% for r in s.block.rows %}<div class="pk-r"><b class="n l{{ ' w' if r.win == 'l' else '' }}">{{ r.l|e }}</b><div class="pk-bar l"><i class="{{ 'w' if r.win == 'l' else '' }}" style="width: {{ r.lw }}%"></i></div><span class="lbl">{{ r.label|e }}</span><div class="pk-bar r"><i class="{{ 'w' if r.win == 'r' else '' }}" style="width: {{ r.rw }}%"></i></div><b class="n{{ ' w' if r.win == 'r' else '' }}">{{ r.r|e }}</b></div>{% endfor %}
+  </div>
+{% elif s.kind == 'split' %}
+  <div class="wrap spl">{% for t in s.block.teams %}<div class="spl-t {{ 'blue' if loop.first else 'red' }}"><h3>{{ t.name|e }}<small>{{ t.avg|e }}</small></h3>{% for m in t.members %}<div class="spl-m">{% if m.img %}<img src="{{ m.img|e }}">{% else %}<i></i>{% endif %}<span>{{ m.name|e }}</span><small class="{{ 'g' if m.guess else '' }}">{{ m.rank|e }}</small></div>{% endfor %}</div>{% endfor %}</div>
+{% elif s.kind == 'ai' %}{% set b = s.block %}
+  <div class="wrap ai">
+    {% if b.summary %}<div class="ai-sum">{{ b.summary|e }}</div>{% endif %}
+    {% for x in b.highlights %}<div class="ai-row"><span class="ai-l good">{{ b.labels[0]|e }}</span><span>{{ x|e }}</span></div>{% endfor %}
+    {% for x in b.issues %}<div class="ai-row"><span class="ai-l bad">{{ b.labels[1]|e }}</span><span>{{ x|e }}</span></div>{% endfor %}
+    {% if b.advice %}<div class="ai-row"><span class="ai-l tip">{{ b.labels[2]|e }}</span><span>{{ b.advice|e }}</span></div>{% endif %}
+    <div class="ai-meta">{{ b.style|e }}风格 · {{ b.model|e if b.model else 'AI' }} 生成 · 仅供参考</div>
+  </div>
+{% elif s.kind == 'form' %}{% set b = s.block %}
+  <div class="wrap pn">
+    {% if b.streak %}<div class="fm-top"><small>最近 {{ b.streak|length }} 局 · 从新到旧</small><div class="streak">{% for w in b.streak %}<i class="{{ 'w' if w else 'l' }}">{{ '胜' if w else '负' }}</i>{% endfor %}</div></div>{% endif %}
+    <div class="fm-head"><span></span><span><i style="background: var(--acc); margin-left: 0"></i>整体<i style="background: var(--gold)"></i>最近 5 局</span><span>整体</span><span>近 5 局</span></div>
+    {% for m in b.rows %}<div class="fm"><span class="fm-l">{{ m.label|e }}</span><div class="fm-bar"><i style="width: {{ m.w_all }}%"></i><i class="r" style="width: {{ m.w_recent }}%"></i></div><b class="n">{{ m.all|e }}</b><b class="n {{ m.cls|e }}">{{ m.recent|e }}</b></div>{% endfor %}
+  </div>
+{% elif s.kind == 'text' %}
+  <div class="wrap pn"><div class="text">{{ s.text|e }}</div></div>
+{% endif %}
+{% if s.note and s.style != 'flow' %}<div class="note">{{ s.note|e }}</div>{% endif %}
+</section>
+{% endfor %}
+{% if doc.tips %}<div class="tips"><span class="tl">试试</span>{% for t in doc.tips %}<span class="tip"><kbd>{{ t.cmd|e }}</kbd>{{ t.desc|e }}</span>{% endfor %}</div>{% endif %}
+<div class="footer{{ '' if doc.tips else ' solo' }}"><span>{{ doc.footer|e }}</span><span>联盟助手{% if doc.theme != 'tool' %} · 数据来源 {% if 'WeGame' in doc.footer %}WeGame{% elif doc.theme == 'cn' %}国服客户端{% else %}OP.GG{% endif %}{% endif %}</span></div>
 </body>
 </html>
 

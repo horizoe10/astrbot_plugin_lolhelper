@@ -1,12 +1,13 @@
 name: astrbot_plugin_lolhelper
 display_name: 联盟助手
-short_desc: 英雄联盟 / 云顶之弈数据查询，支持文本、Markdown、图片三种推送和国服战绩
+short_desc: 英雄联盟 / 云顶之弈数据查询，支持文本、Markdown、图片三种推送、国服战绩、AI 点评和群玩法
 desc: |
   联盟助手：英雄联盟 / 云顶之弈数据插件（数据来自 OP.GG 官方 MCP）。
   英雄出装与克制、海克斯大乱斗、版本梯队、召唤师战绩、电竞赛程 / 赛况 / 积分、云顶阵容 / 英雄出装 / 装备 / 强化符文。
-  支持纯文本、Markdown、图片整合三种推送方式，账号绑定与新对局推送，
-  内置国服客户端连接（参考 League Akari 的 LCU + SGP 方案）查询国服战绩，也支持远程代理。
-version: "1.4.0"
+  AI 点评（单局、近期诊断、比赛单局与整场）和群玩法（日榜周榜、群友播报、PK、赛事竞猜、猜英雄、内战分队）。
+  支持纯文本、Markdown、图片整合三种推送方式，账号绑定与新对局、赛事推送，
+  内置国服客户端连接（参考 League Akari 的 LCU + SGP 方案）查询国服战绩，也支持远程代理和 WeGame 扫码登录。
+version: "2.0.0"
 author: horizoe10
 repo: https://github.com/horizoe10/astrbot_plugin_lolhelper
 astrbot_version: ">=4.10.0"

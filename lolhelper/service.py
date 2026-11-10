@@ -12,6 +12,7 @@ from .log import default_logger
 from .cache import TTLCache
 from .constants import (
     GAME_MODES,
+    league_backdrop,
     league_info,
     stage_zh,
     OPGG_REGIONS,
@@ -100,9 +101,9 @@ F_PROFILE = [
 F_MATCHES = [
     "data.game_history[].{id,created_at,game_type,game_length_second,game_map}",
     "data.game_history[].average_tier_info.{tier,division}",
-    "data.game_history[].participants[].{champion_id,champion_name,position,items[],spells[]}",
+    "data.game_history[].participants[].{champion_id,champion_name,position,items[],spells[],role_bound_item}",
     "data.game_history[].participants[].rune.{primary_rune_id,secondary_page_id}",
-    "data.game_history[].participants[].stats.{kill,death,assist,champion_level,result,minion_kill,neutral_minion_kill,op_score,op_score_rank,total_damage_dealt_to_champions}",
+    "data.game_history[].participants[].stats.{kill,death,assist,champion_level,result,minion_kill,neutral_minion_kill,op_score,op_score_rank,total_damage_dealt_to_champions,largest_multi_kill}",
 ]
 
 
@@ -159,7 +160,7 @@ def versus_row(g: dict, tz: str) -> tuple[dict, str]:
     row = {
         "time": when, "league": info["short"], "league_icon": info["logo"], "league_color": info["color"],
         "stage": stage, "bo": bo, "state": state,
-        "score": score, "score_cls": score_cls,
+        "score": score, "score_cls": score_cls, "sh": hs or 0, "sa": as_ or 0,
         "home": {"name": h_name, "logo": home.get("image_url"), "win": home_win, "lose": away_win},
         "away": {"name": a_name, "logo": away.get("image_url"), "win": away_win, "lose": home_win},
     }
@@ -273,7 +274,7 @@ class OpggService:
         sub = ["单双排", f"版本 {version}"]
         if scope.get("matches"):
             sub.append(f"{big(scope['matches'])} 场")
-        doc = Doc(title=title, subtitle=" · ".join(sub), theme="lol")
+        doc = Doc(title=title, subtitle=" · ".join(sub), theme="lol", width=820)
         self.scope_badges(doc, scope)
         data: dict[str, Any] = {"positions": {}, "scope": scope, "order": {}}
         for pos in positions:
@@ -303,8 +304,13 @@ class OpggService:
                 ["#", "英雄", "梯队", "胜率", "登场", "禁用"],
                 table,
                 widths=["13%", "33%", "13%", "14%", "13%", "14%"],
+                style="top3" if position else "cardrow",
             )
         first = data["positions"][positions[0]][:3]
+        lead = first[0] if first else {}
+        lead_champ = self.gd.champion(lead["champion_id"]) if lead.get("champion_id") else self.gd.champion_by_name(lead.get("champion") or "")
+        doc.hero = {"art": self.gd.splash(lead_champ), "icon": self.gd.role_icon(position) if position else None, "logo": True,
+                    "name": title, "chips": [{"text": x, "cls": "acc" if i == 0 else ""} for i, x in enumerate(sub)]}
         if position:
             pick = first[2] if len(first) > 2 else (first[0] if first else None)
             n = first.index(pick) + 1 if pick else 1
@@ -392,23 +398,37 @@ class OpggService:
         title = self.gd.display_name(champ)
         version = scope.get("version") or self.gd.version
         subtitle = " · ".join(x for x in [pos_label, GAME_MODES.get(mode, mode), f"版本 {version}"] if x)
-        doc = Doc(title=title, subtitle=subtitle, icon=self.gd.champ_icon(champ), theme="lol")
+        doc = Doc(title=title, subtitle=subtitle, icon=self.gd.champ_icon(champ), theme="lol", width=820)
         self.scope_badges(doc, scope, mode)
         t = stats.get("tier")
+        hero_stats = []
         if t is not None:
-            doc.badge("OP" if str(t) == "0" else f"T{t}", tier_pill(t))
-        doc.badge(f"胜率 {pct(stats.get('win_rate'))}", rate_cls(stats.get("win_rate")))
-        doc.badge(f"登场 {pct(stats.get('pick_rate'))}")
+            doc.badge("OP" if str(t) == "0" else f"T{t}", tier_pill(t) + " hx")
+        doc.badge(f"胜率 {pct(stats.get('win_rate'))}", rate_cls(stats.get("win_rate")) + " hx")
+        hero_stats.append({"v": pct(stats.get("win_rate")), "k": "胜率"})
+        doc.badge(f"登场 {pct(stats.get('pick_rate'))}", "hx")
+        hero_stats.append({"v": pct(stats.get("pick_rate")), "k": "登场率"})
         if stats.get("ban_rate") is not None:
-            doc.badge(f"禁用 {pct(stats.get('ban_rate'))}")
+            doc.badge(f"禁用 {pct(stats.get('ban_rate'))}", "hx")
+            hero_stats.append({"v": pct(stats.get("ban_rate")), "k": "禁用率"})
         if stats.get("kda") is not None:
-            doc.badge(f"KDA {num(stats.get('kda'))}")
+            doc.badge(f"KDA {num(stats.get('kda'))}", "hx")
+            hero_stats.append({"v": num(stats.get("kda")), "k": "KDA"})
         if stats.get("rank"):
-            doc.badge(f"排名 #{stats.get('rank')}")
-
-        runes = d.get("runes") or {}
-        if runes:
-            self._add_runes(doc, runes)
+            doc.badge(f"排名 #{stats.get('rank')}", "hx")
+        if stats.get("play"):
+            hero_stats.append({"v": big(stats.get("play")), "k": "样本场次"})
+        chips = [{"text": x} for x in [GAME_MODES.get(mode, mode), f"版本 {version}"] if x]
+        if pos_label:
+            chips.insert(0, {"text": pos_label, "img": self.gd.role_icon(api_pos), "cls": "acc"})
+        else:
+            chips[0]["cls"] = "acc"
+        side = None
+        if t is not None:
+            side = {"small": "梯队", "big": "OP" if str(t) == "0" else f"T{t}", "cls": "op" if str(t) == "0" else f"t{t}",
+                    "sub": f"{pos_label}第 {stats['rank']} 名" if stats.get("rank") and pos_label else ""}
+        doc.hero = {"art": self.gd.splash(champ), "icon": self.gd.champ_icon(champ), "name": champ.get("name_zh") or title,
+                    "tag": champ.get("title_zh") or "", "chips": chips, "side": side, "stats": hero_stats}
 
         def tiles_of(block: dict | None, label: str = "") -> list[Cell]:
             if not block:
@@ -435,7 +455,7 @@ class OpggService:
             note = ""
             if core.get("play"):
                 note = f"核心三件套选用率 {pct(core.get('pick_rate'))} · 胜率 {pct(core['win'] / core['play'])}"
-            doc.add_tiles("推荐出装", core_tiles, note)
+            doc.add_tiles("推荐出装", core_tiles, note, style="flow")
         rows, lines = [], []
         for slot, label in (("fourth_items", "第四件"), ("fifth_items", "第五件"), ("sixth_items", "第六件")):
             opts = []
@@ -453,7 +473,10 @@ class OpggService:
                     for x in later[:6]]
             rows.append({"label": "常见后续", "items": opts})
             lines.append("常见后续：" + " / ".join(f"{o['name']}({o['sub']})" for o in opts))
-        doc.add_block("后续装备", "iconrows", {"rows": rows}, lines)
+        doc.add_block("后续装备", "iconrows", {"rows": rows}, lines, style="follow")
+        runes = d.get("runes") or {}
+        if runes:
+            self._add_runes(doc, runes)
         await self._add_skills(doc, champ, d)
         counter_rows, counter_lines = [], []
         for key_name, label, cls in (("weak_counters", "难对付", "lose"), ("strong_counters", "好打", "win")):
@@ -461,11 +484,18 @@ class OpggService:
             for c in (d.get(key_name) or [])[:5]:
                 name = c.get("champion_name", "?")
                 icon = self.gd.champ_icon(self.gd.champion(c.get("champion_id"))) if c.get("champion_id") else self.gd.champ_icon_by_name(name)
-                items.append({"icon": icon, "name": name, "sub": f"胜率 {pct(c.get('my_win_rate'))}", "cls": cls})
+                wr = c.get("my_win_rate")
+                try:
+                    wr_v = float(wr) * (100 if float(wr) <= 1 else 1)
+                except (TypeError, ValueError):
+                    wr_v = None
+                items.append({"icon": icon, "name": name, "sub": f"胜率 {pct(wr)}", "cls": cls,
+                              "wr": round(wr_v, 1) if wr_v is not None else None})
             if items:
                 counter_rows.append({"label": label, "items": items})
                 counter_lines.append(f"{label}：" + " / ".join(f"{i['name']}({i['sub']})" for i in items))
-        doc.add_block("对线克制", "iconrows", {"rows": counter_rows}, counter_lines, note="胜率为本英雄对阵该英雄时的胜率")
+        doc.add_block("对线克制", "iconrows", {"rows": counter_rows}, counter_lines,
+                      note=f"胜率为{champ.get('name_zh') or '本英雄'}对阵该英雄时的胜率", style="matchup")
         doc.footer = self._foot(created, f"样本 {big(stats.get('play'))} 场")
         if augments is not None:
             self._add_augments(doc, augments)
@@ -638,6 +668,7 @@ class OpggService:
             "champion_name": p.get("champion_name") or self.gd.display_name(self.gd.champion(p.get("champion_id"))),
             "position": POSITION_FROM_API.get(str(p.get("position") or "").upper()),
             "items": p.get("items") or [],
+            "role_item": p.get("role_bound_item") or None,
             "spells": p.get("spells") or [],
             "keystone": rune.get("primary_rune_id"),
             "sub_style": rune.get("secondary_page_id"),
@@ -650,6 +681,7 @@ class OpggService:
             "score": st.get("op_score"),
             "score_rank": st.get("op_score_rank"),
             "damage": st.get("total_damage_dealt_to_champions"),
+            "multikill": st.get("largest_multi_kill"),
             "avg_tier": tier_text(avg.get("tier"), avg.get("division")) if avg.get("tier") else "",
         }
 
@@ -717,6 +749,7 @@ class OpggService:
             theme="lol",
         )
         ranked_tiles = []
+        queues = []
         for ls in summ.get("league_stats") or []:
             ti = ls.get("tier_info") or {}
             if not ti.get("tier"):
@@ -728,12 +761,14 @@ class OpggService:
             if not img or img.endswith(".svg"):
                 img = tier_emblem(ti.get("tier"))
             ranked_tiles.append(rank_tile(q, tier_s, w, l, img))
+            queues.append({"queue": q, "tier": ti.get("tier"), "division": ti.get("division"), "lp": ti.get("lp"),
+                           "w": w, "l": l, "emblem": img, "solo": ls.get("game_type") == "SOLORANKED"})
         ladder = summ.get("ladder_rank") or {}
         if ladder.get("rank"):
             top = pct(ladder["rank"] / ladder["total"], 2) if ladder.get("total") else ""
-            doc.badge(f"天梯 #{ladder['rank']}" + (f"（前 {top}）" if top else ""))
+            doc.badge(f"天梯 #{ladder['rank']}" + (f" · 前 {top}" if top else ""))
         if ranked_tiles:
-            doc.add_tiles("段位", ranked_tiles)
+            doc.add_tiles("段位", ranked_tiles, style="hide")  # the banner shows the ranks
         else:
             doc.badge("本赛季未定级", "muted")
         if detail:
@@ -749,19 +784,23 @@ class OpggService:
                 ])
             doc.add_table("本赛季常用英雄", ["英雄", "场次", "胜率", "KDA"], rows)
         if matches:
-            from .game import add_match_cards, target_entry
+            from .game import add_match_cards, form_stats, target_entry
 
             games = await self.games_for(matches, name, tag, region)
             entries = [target_entry(g) or m for g, m in zip(games, matches)]
-            doc.width = 880
+            doc.width = 920
             add_match_cards(
                 doc,
-                f"最近 {len(matches)} 场",
+                "最近战绩",
                 games,
                 self.gd,
                 note=self.match_summary(entries),
             )
             self.match_tips(doc, entries)
+        else:
+            entries = []
+        doc.hero = self.player_hero(summ.get("game_name") or name, summ.get("tagline") or tag, summ.get("profile_image_url"),
+                                    summ.get("level"), [{"text": OPGG_REGIONS.get(region, region), "cls": "acc"}], queues, entries)
         doc.footer = self._foot(created)
         doc.link = f"https://op.gg/lol/summoners/{region}/{quote(riot_id.replace('#', '-'))}"
         data = {"region": region, "summoner": summ, "matches": matches}
@@ -778,6 +817,16 @@ class OpggService:
         if names:
             champ = names.most_common(1)[0][0]
             doc.tip(f"/lol 英雄 {champ}", "最近常玩英雄的出装")
+
+    def player_hero(self, name: str, tag: str, icon: str | None, level, chips: list[dict], queues: list[dict],
+                    entries: list[dict]) -> dict:
+        """Banner of a match history card: profile, rank block, recent form and the main champion's art."""
+        from .game import form_stats, rank_side
+
+        queues = sorted(queues, key=lambda q: 0 if q.get("solo") else 1)
+        stats, main = form_stats(entries, self.gd)
+        return {"art": self.gd.splash(main), "icon": icon, "level": f"Lv.{level}" if level not in (None, "", "?") else "",
+                "name": name, "tag": f"#{tag}" if tag else "", "chips": chips, "side": rank_side(queues), "stats": stats}
 
     async def _game_raw(self, region: str, m: dict, name: str, tag: str) -> tuple[dict, float]:
         from .game import F_GAME
@@ -899,6 +948,14 @@ class OpggService:
         else:
             names = " / ".join(league_label(x) for x in leagues)
             doc = Doc(title=f"英雄联盟{kind}" + (f" · {names}" if names else ""), subtitle=tz_note, theme="esports")
+        doc.width = 820
+        one = league_info(leagues[0]) if len(leagues) == 1 else None
+        chips = [{"text": kind, "cls": "acc"}, {"text": tz_note}]
+        if not one:
+            chips += [{"text": league_info(x)["short"] or league_label(x), "img": league_info(x)["logo"]} for x in leagues]
+        doc.hero = {"icon": one["logo"] if one else None, "logo": True,
+                    "name": (one["full"] or league_label(leagues[0])) if one else "英雄联盟赛事", "tag": kind, "chips": chips,
+                    **(league_backdrop(one) if one else {"wm": "mark"})}
         rows, vs_rows, lines = [], [], []
         for i, g in enumerate(games[:limit], 1):
             row, line = versus_row(g, self.cfg.timezone)
@@ -934,7 +991,12 @@ class OpggService:
         if played <= 0:
             return [], time.time()
         ttl = 60 if live else 6 * 3600
-        return await self.cache.get_or_load(f"esgames:{g.get('id')}:{played}", ttl, lambda: self.esp.games(g.get("id"), played))
+        key = f"esgames:{g.get('id')}:{played}"
+        games, created = await self.cache.get_or_load(key, ttl, lambda: self.esp.games(g.get("id"), played))
+        rated = all(any(float(p.get("opScore") or 0) > 0 for p in gm.get("players") or []) for gm in games)
+        if not live and not rated and time.time() - created < 2:
+            self.cache.set(key, games, 300)  # ratings (MVP) not computed yet: refetch in 5 minutes
+        return games, created
 
     async def esports_find(self, leagues: list[str] | None, index: int | None = None, team: str | None = None,
                            match_id: str | None = None) -> dict:
@@ -971,7 +1033,7 @@ class OpggService:
             game = next((x for x in games if x.get("set") == game_no), None)
             if not game:
                 raise NotFoundError(f"第 {game_no} 局暂无数据（本场共有 {len(games)} 局数据）")
-            return build_esports_game_view(g, game, self.gd, self.cfg.timezone, created)
+            return build_esports_game_view(g, game, self.gd, self.cfg.timezone, created, games)
         return build_series_view(g, games, self.gd, self.cfg.timezone, created, headline, key)
 
     async def standings(self, league: str) -> View:
@@ -987,17 +1049,23 @@ class OpggService:
             theme="esports",
         )
         league_theme(doc, lg.get("shortName") or league)
+        info = league_info(lg.get("shortName") or league)
+        doc.width = 820
+        doc.hero = {"icon": info["logo"] or lg.get("imageUrl"), "logo": True, "name": info["full"] or league.upper(), "tag": "积分榜",
+                    "chips": [{"text": x, "cls": "acc" if i == 0 else ""} for i, x in enumerate(
+                        [" ".join(str(x) for x in [serie.get("year"), serie.get("season")] if x), stage_zh(tour.get("name"))]) if x],
+                    **league_backdrop(info, lg.get("imageUrl"))}
         rows = []
         for s in raw["standings"]:
             team = s.get("team") or {}
             rows.append([
-                str(s.get("position", "")),
+                Cell(str(s.get("position", "")), cls=rank_cls(s.get("position"))),
                 Cell(team.get("acronym") or team.get("name", "?"), img=team.get("imageUrl"), sub=team.get("name", ""), cls="logo"),
                 f"{s.get('win', 0)}-{s.get('lose', 0)}",
                 f"{s.get('setWin', 0)}-{s.get('setLose', 0)}",
                 str(s.get("point", "")),
             ])
-        doc.add_table("", ["#", "战队", "大场", "小场", "积分"], rows)
+        doc.add_table("", ["#", "战队", "大场", "小场", "积分"], rows, style="standings")
         short = league_label(league_info(lg.get("shortName") or league)["key"]) if league_info(lg.get("shortName") or league)["color"] else league.upper()
         doc.tip(f"/lol 赛程 {short}", "后续赛程")
         doc.tip(f"/lol 赛果 {short}", "最近赛果")

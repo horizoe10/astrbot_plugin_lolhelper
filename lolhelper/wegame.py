@@ -8,6 +8,7 @@ change without notice.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 from urllib.parse import unquote
 
@@ -94,6 +95,24 @@ class WeGameClient:
         self.expired = False
         return data or {}
 
+    async def check(self) -> bool:
+        """Cheap login check (the call wegame.com.cn makes on every page load). False = expired."""
+        if not self.cookie:
+            return False
+        url = f"https://www.wegame.com.cn/api/forum/lua/tgpforum_auth_svr/checklogin?agent_client_type=1&t={int(time.time() * 1000)}&from_src=we.game.site"
+        headers = {"Cookie": self.cookie, "Referer": "https://www.wegame.com.cn/", "Origin": "https://www.wegame.com.cn"}
+        try:
+            async with self.http.session.get(url, headers=headers, timeout=self.timeout, proxy=None) as resp:
+                data = await resp.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+            raise BridgeError(f"连接 WeGame 失败：{type(exc).__name__}") from exc
+        ok = (data or {}).get("result") == 1 and bool((data or {}).get("data"))
+        if (data or {}).get("code") in (ERR_EXPIRED, ERR_NO_LOGIN) or not ok:
+            self.expired = True
+            return False
+        self.expired = False
+        return True
+
     async def search(self, name: str, tag: str = "") -> list[dict]:
         players = (await self.call("SearchPlayer", {"nickname": name})).get("players") or []
         if tag and str(tag).isdigit():
@@ -158,6 +177,7 @@ def normalize_wg_game(d: dict, openid: str, gd: GameData) -> dict[str, Any]:
             "is_target": bool(openid) and p.get("openid") == openid,
             "position": POSITION_FROM_API.get(str(p.get("position") or "").upper()),
             "items": [p.get(f"item{i}") for i in range(7) if p.get(f"item{i}")],
+            "role_item": p.get("roleBoundItem") or p.get("role_bound_item") or None,
             "spells": [x for x in (p.get("summonSpell1Id"), p.get("summonSpell2Id")) if x],
             "keystone": p.get("PERK0") or p.get("keystoneId") or None,
             "sub_style": p.get("perkSubStyle") or None,

@@ -40,7 +40,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 
 class ConsoleLog:
@@ -467,6 +467,18 @@ class Bridge:
         sid = self._server(q)
         return {"source": "sgp", "data": self.sgp.request(sid, f"/match-history-query/v1/products/lol/{{sub}}_{gid}/SUMMARY", "entitlements")}
 
+    def timeline(self, q):
+        gid = int(q.get("game_id") or 0)
+        sid = self._server(q)
+        try:
+            data = self.sgp.request(sid, f"/match-history-query/v1/products/lol/{{sub}}_{gid}/DETAILS", "entitlements")
+            return {"source": "sgp", "data": data}
+        except BridgeError as exc:
+            if sid != self.lcu.sgp_server_id():
+                raise
+            log.warning("SGP timeline failed (%s), falling back to LCU", exc)
+            return {"source": "lcu", "data": self.lcu.request("GET", f"/lol-match-history/v1/game-timelines/{gid}")}
+
     def raw_lcu(self, q):
         if not self.cfg.get("allow_raw_lcu"):
             raise BridgeError("raw LCU access is disabled (allow_raw_lcu=false)", 403, "forbidden")
@@ -483,6 +495,7 @@ ROUTES = {
     "/v1/ranked": "ranked",
     "/v1/matches": "matches",
     "/v1/game": "game",
+    "/v1/timeline": "timeline",
     "/v1/lcu": "raw_lcu",
 }
 

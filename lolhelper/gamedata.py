@@ -2,8 +2,9 @@
 
 Sources (all cached on disk and refreshed periodically):
 - Data Dragon (LoL champions, items, summoner spells, profile icons)
-- CommunityDragon (TFT champion and trait names for the current set)
+- CommunityDragon (TFT champion and trait names and set splashes for the current set)
 - OP.GG MCP tft_list_item_combinations (TFT item names, OP.GG item keys)
+- Tencent TFT site (season banner and Chinese season logo, store art of units without a set splash)
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import re
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 from .log import default_logger
 from .cache import JsonStore
@@ -21,9 +23,14 @@ from .net import HttpClient
 from .nicknames import NICKNAMES
 
 _NORM_RE = re.compile(r"[\s'’·.\-_]+")
-SCHEMA = 5  # bump when the cached game data layout changes
+SCHEMA = 6  # bump when the cached game data layout changes
 
 RARITY = {"kSilver": "silver", "kGold": "gold", "kPrismatic": "prismatic"}
+
+TFT_SITE = "https://lol.qq.com/tft/"
+TFT_THEME = "https://game.gtimg.cn/images/lol/tft/themewebsite/"  # bg-top-s18.png, logo-tft-s18.png
+TFT_CHESS = "https://game.gtimg.cn/images/lol/act/img/tft/js/chess.js"  # Tencent unit list: apiName -> store id
+TFT_STORE = "https://game.gtimg.cn/images/lol/tftstore/s{set}/624x318/{id}.png"
 
 
 def norm(s: str) -> str:
@@ -199,11 +206,14 @@ class GameData:
                 api = c.get("apiName")
                 if not api:
                     continue
+                art = str(c.get("icon") or "")
                 champions[api] = {
                     "name": c.get("name") or api,
                     "cost": c.get("cost"),
                     "traits": c.get("traits") or [],
                     "icon": self._cdragon_asset(c.get("tileIcon") or c.get("squareIcon")),
+                    # set splash (1024x512); set-only units such as monsters only have an unusable hashed path
+                    "splash": self._cdragon_asset(art) if "splash_centered" in art.lower() else None,
                 }
             for t in (sd or {}).get("traits", []):
                 if t.get("apiName"):
@@ -212,6 +222,10 @@ class GameData:
                         trait_icons[t["apiName"]] = self._cdragon_asset(t["icon"])
         except Exception as exc:
             self.logger.warning(f"[lolhelper] CommunityDragon 云顶数据获取失败，将用英文 ID 显示：{exc}")
+        banner, store = await asyncio.gather(
+            self._tft_banner(set_no), self._tft_store_art(set_no, [a for a, c in champions.items() if not c.get("splash")]))
+        for api, url in store.items():
+            champions[api]["store_art"] = url
         return {
             "fetched_at": time.time(),
             "set": set_no,
@@ -220,8 +234,71 @@ class GameData:
             "champions": champions,
             "traits": traits,
             "trait_icons": trait_icons,
+            "banner": banner,
             "schema": SCHEMA,
         }
+
+    async def _image_ok(self, url: str) -> bool:
+        import aiohttp
+
+        try:
+            async with self.http.session.head(url, proxy=self.http.proxy, allow_redirects=True,
+                                              timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                return resp.status == 200 and resp.headers.get("Content-Type", "").startswith("image/")
+        except Exception:
+            return False
+
+    async def _get_text(self, url: str) -> str:
+        import aiohttp
+
+        async with self.http.session.get(url, proxy=self.http.proxy, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            return await resp.text(errors="ignore") if resp.status == 200 else ""
+
+    async def _tft_banner(self, set_no: int) -> dict[str, str]:
+        """Season banner and Chinese season logo of the Tencent TFT site ({"bg", "logo"}): the usual file names
+        for this set first, else the newest season referenced by the site's stylesheet."""
+        out: dict[str, str] = {}
+        if set_no:
+            bg, logo = f"{TFT_THEME}bg-top-s{set_no}.png", f"{TFT_THEME}logo-tft-s{set_no}.png"
+            ok = await asyncio.gather(self._image_ok(bg), self._image_ok(logo))
+            out = {k: v for (k, v), good in zip((("bg", bg), ("logo", logo)), ok) if good}
+        if "bg" in out:
+            return out
+        try:
+            page = await self._get_text(TFT_SITE)
+            m = re.search(r"""["']([^"']*themewebsite[^"']*\.css)""", page)
+            css = await self._get_text(urljoin(TFT_SITE, m.group(1))) if m else ""
+        except Exception as exc:
+            self.logger.info(f"[lolhelper] 云顶官网赛季横幅获取失败：{exc}")
+            return out
+
+        def newest(kind: str) -> tuple[str | None, int]:
+            hits = re.findall(r"((?:https?:)?//[\w./-]+/%s-s(\d+)\.png)" % kind, css)
+            if not hits:
+                return None, 0
+            url, n = max(hits, key=lambda h: int(h[1]))
+            return ("https:" + url if url.startswith("//") else url), int(n)
+
+        bg, n = newest("bg-top")
+        logo, n_logo = newest("logo-tft")
+        if bg:
+            out = {"bg": bg, **({"logo": logo} if logo and n_logo == n else {})}
+        return out
+
+    async def _tft_store_art(self, set_no: int, apis: list[str]) -> dict[str, str]:
+        """Tencent store art (624x318) of units that have no set splash on CommunityDragon."""
+        if not set_no or not apis:
+            return {}
+        try:
+            data = await self.http.get_json(TFT_CHESS, retries=1)
+        except Exception as exc:
+            self.logger.info(f"[lolhelper] 腾讯云顶棋子数据获取失败：{exc}")
+            return {}
+        ids = {str(x.get("hero_EN_name")): str(x.get("name") or "").split(".")[0]
+               for x in (data or {}).get("data") or [] if isinstance(x, dict)}
+        cand = {api: TFT_STORE.format(set=set_no, id=ids[api]) for api in apis if ids.get(api, "").isdigit()}
+        ok = await asyncio.gather(*(self._image_ok(u) for u in cand.values()))
+        return {api: url for (api, url), good in zip(cand.items(), ok) if good}
 
     def _cdragon_asset(self, path: str | None) -> str | None:
         if not path:
@@ -309,6 +386,22 @@ class GameData:
             return None
         return f"{self.cdragon}/latest/plugins/rcp-fe-lol-match-history/global/default/{kind}-{200 if red else 100}.png"
 
+    ROLE_ICON_KEYS = {"top": "top", "jungle": "jungle", "mid": "middle", "adc": "bottom", "support": "utility"}
+
+    def role_icon(self, position: str | None) -> str | None:
+        """Position icon of the client's lane selector (top / jungle / mid / adc / support)."""
+        key = self.ROLE_ICON_KEYS.get(str(position or ""))
+        if not key:
+            return None
+        return (f"{self.cdragon}/latest/plugins/rcp-fe-lol-clash/global/default/assets/images/position-selector/"
+                f"positions/icon-position-{key}.png")
+
+    def splash(self, c: dict | None) -> str | None:
+        """Default skin splash art (about 150 KB), used as the card banner background."""
+        if not c or not c.get("key"):
+            return None
+        return f"{self.ddragon}/cdn/img/champion/splash/{c['key']}_0.jpg"
+
     def champ_icon(self, c: dict | None) -> str | None:
         if not c or not self.version:
             return None
@@ -382,6 +475,43 @@ class GameData:
     def tft_champion_cost(self, api: str) -> int | None:
         c = (self.tft.get("champions") or {}).get(api)
         return c.get("cost") if c else None
+
+    def tft_splash(self, api: str | None) -> str | None:
+        """Splash art of the League champion behind a TFT unit (banner background); None for set-only units."""
+        if not api:
+            return None
+        c = self.champion_by_name(_strip_tft_prefix(api)) or self.champion_by_name(self.tft_champion_name(api))
+        return self.splash(c)
+
+    def tft_art(self, api: str | None) -> str | None:
+        """Current-set art of a TFT unit: the set splash, else the Tencent store art; None when neither exists."""
+        c = (self.tft.get("champions") or {}).get(api or "") or {}
+        return c.get("splash") or c.get("store_art")
+
+    def tft_banner(self) -> tuple[str | None, str | None]:
+        """(season banner, Chinese season logo) of the current set, from the Tencent TFT site."""
+        b = self.tft.get("banner") or {}
+        return b.get("bg"), b.get("logo")
+
+    def tft_localize(self, text: str) -> str:
+        """Replace English unit names left in OP.GG's Chinese comp names ("峡谷野怪 Brambleback") with the
+        Chinese names; a name that is already in the text is just dropped."""
+        def unit(word: str) -> str | None:
+            api = self._tft_champ_index.get(norm(word))
+            return self.tft_champion_name(api) if api else None
+
+        def sub(m: re.Match) -> str:
+            run = m.group(0)
+            zh = unit(run)
+            if zh is None:
+                parts = [(w, unit(w)) for w in run.split()]
+                if not any(z for _, z in parts):
+                    return run
+                return " ".join((z if z not in text else "") if z else w for w, z in parts)
+            return "" if zh in text else zh
+
+        out = re.sub(r"[A-Za-z][A-Za-z'’.]*(?:[ -][A-Za-z][A-Za-z'’.]*)*", sub, str(text or ""))
+        return re.sub(r"\s{2,}", " ", out).strip() or str(text or "")
 
     def tft_item_name(self, api: str) -> str:
         it = (self.tft.get("items") or {}).get(api)

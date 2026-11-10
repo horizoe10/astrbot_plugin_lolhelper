@@ -274,20 +274,21 @@ def resolve_league(token: str) -> str | None:
 # --------------------------------------------------------------- esports leagues
 _SYM = "https://s-qwer.op.gg/images/symbols/"
 _LG = "https://s-qwer.op.gg/images/lol/leagues/"
-# key -> (short Chinese name, full Chinese name, theme color, logo for dark backgrounds)
+_LES = "https://static.lolesports.com/leagues/"  # region icons of the LoL Esports power rankings (lolesports.com/en-US/gpr)
+# key -> (short Chinese name, full Chinese name, theme color, icon for dark backgrounds)
 LEAGUE_INFO: dict[str, tuple[str, str, str, str]] = {
     "worlds": ("全球总决赛", "英雄联盟全球总决赛", "#3b7bff", _SYM + "WORLD@white.png"),
     "msi": ("季中冠军赛", "英雄联盟季中冠军赛", "#d4a73c", _SYM + "MSI@white.png"),
     "first stand": ("先锋赛", "英雄联盟先锋赛", "#f07a28", _LG + "141_1783606937219.png"),
     "ewc": ("电竞世界杯", "电竞世界杯", "#22c55e", _SYM + "EWC.png"),
-    "lpl": ("LPL", "LPL 中国职业联赛", "#e5262f", _SYM + "LPL@white.png"),
-    "lck": ("LCK", "LCK 韩国冠军联赛", "#19c3e6", _SYM + "LCK@white.png"),
-    "lec": ("LEC", "LEC 欧洲冠军联赛", "#14d9b8", _SYM + "LEC@white.png"),
-    "lcs": ("LCS", "LCS 北美冠军联赛", "#6a7dff", _SYM + "LCS@white.png"),
-    "lcp": ("LCP", "LCP 亚太冠军联赛", "#ff5a8a", _LG + "138_1783606935767.png"),
+    "lpl": ("LPL", "LPL 中国职业联赛", "#e5262f", _LES + "1592516115322_LPL-01-FullonDark.png"),
+    "lck": ("LCK", "LCK 韩国冠军联赛", "#19c3e6", _LES + "lck-color-on-black.png"),
+    "lec": ("LEC", "LEC 欧洲冠军联赛", "#14d9b8", _LES + "1592516184297_LEC-01-FullonDark.png"),
+    "lcs": ("LCS", "LCS 北美冠军联赛", "#6a7dff", _LES + "1706356907418_LCSNew-01-FullonDark.png"),
+    "lcp": ("LCP", "LCP 亚太冠军联赛", "#ff5a8a", _LES + "1733468139601_lcp-color-golden.png"),
     "lta north": ("LTA 北区", "LTA 美洲冠军联赛 · 北区", "#f5a623", _LG + "140_1783606938094.png"),
     "lta south": ("LTA 南区", "LTA 美洲冠军联赛 · 南区", "#f5a623", _LG + "139_1783606939593.png"),
-    "cblol": ("CBLOL", "CBLOL 巴西联赛", "#84cc16", _SYM + "CBLOL@white.png"),
+    "cblol": ("CBLOL", "CBLOL 巴西联赛", "#84cc16", _LES + "cblol-logo-symbol-offwhite.png"),
     "vcs": ("VCS", "VCS 越南联赛", "#facc15", _SYM + "VCS@white.png"),
     "ljl": ("LJL", "LJL 日本联赛", "#e11d48", _SYM + "LJL@white.png"),
     "kespa": ("KeSPA 杯", "KeSPA 杯", "#3b82f6", _SYM + "KESPA.png"),
@@ -295,6 +296,11 @@ LEAGUE_INFO: dict[str, tuple[str, str, str, str]] = {
     "tcl": ("TCL", "TCL 土耳其联赛", "#ef4444", _SYM + "TCL@white.png"),
 }
 _LEAGUE_KEY_ALIAS = {"fst": "first stand", "world championship": "worlds", "mid-season invitational": "msi"}
+# one-colour symbols for the banner watermark, where the icon above is in colour
+LEAGUE_MARKS: dict[str, str] = {
+    "lpl": _SYM + "LPL@white.png", "lck": _SYM + "LCK@white.png", "lec": _SYM + "LEC@white.png",
+    "lcs": _SYM + "LCS@white.png", "lcp": _LG + "138_1783606935767.png", "cblol": _SYM + "CBLOL@white.png",
+}
 
 
 def league_info(name: str | None) -> dict:
@@ -307,6 +313,24 @@ def league_info(name: str | None) -> dict:
         return {"key": key, "short": raw, "full": raw, "color": "", "logo": None}
     short, full, color, logo = info
     return {"key": key, "short": short, "full": full, "color": color, "logo": logo}
+
+
+# official poster per league key (plugin setting esports.posters), see set_league_posters
+LEAGUE_POSTERS: dict[str, str] = {}
+
+
+def set_league_posters(posters: dict[str, str] | None) -> None:
+    LEAGUE_POSTERS.clear()
+    LEAGUE_POSTERS.update({str(k).lower(): str(v) for k, v in (posters or {}).items() if v})
+
+
+def league_backdrop(info: dict, logo: str | None = None) -> dict:
+    """Banner background of an esports card: the configured official poster ({"art": url}), else a poster
+    generated from the league colour with the league symbol as watermark ({"wm": url}); "mark" stands for the
+    plugin's own mark (unknown or merged leagues)."""
+    key = str(info.get("key") or "").lower()
+    url = LEAGUE_POSTERS.get(key)
+    return {"art": url} if url else {"wm": LEAGUE_MARKS.get(key) or info.get("logo") or logo or "mark"}
 
 
 _STAGE_RULES: list[tuple[str, str]] = [

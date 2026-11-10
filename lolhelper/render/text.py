@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from ..doc import Cell, Doc, limited
 
+IMAGE_ONLY = {"esstats", "mvp"}  # visual panels whose facts are already in the other sections
+
 
 def _cell(c: Cell) -> str:
     return f"{c.text}({c.sub})" if c.sub else c.text
@@ -15,6 +17,8 @@ def render_text(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> str:
     if doc.badges:
         lines.append(" | ".join(b.text for b in doc.badges))
     for s in doc.sections:
+        if s.kind in IMAGE_ONLY:
+            continue
         lines.append("")
         if s.title:
             lines.append(f"▌{s.title}")
@@ -31,7 +35,7 @@ def render_text(doc: Doc, max_rows: int = 10, show_footer: bool = True) -> str:
             lines.extend(f"• {i}" for i in s.items)
             if s.total > len(s.items):
                 lines.append(f"…共 {s.total} 条")
-        elif s.kind in ("cards", "team", "runes", "skills", "iconrows", "versus", "series"):
+        elif s.kind in ("cards", "team", "runes", "skills", "iconrows", "versus", "series", "ai", "form", "podium", "boards", "pk", "split"):
             lines.extend(s.items)
         elif s.kind == "tiles":
             lines.append(" / ".join(_cell(t) for t in s.tiles))

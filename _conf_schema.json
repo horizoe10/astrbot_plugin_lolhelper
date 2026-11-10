@@ -65,6 +65,22 @@
         ],
         "hint": "不在列表中的平台会把 Markdown 降级为纯文本。QQ 官方机器人开通 Markdown 权限后可加入 qq_official"
       },
+      "button_platforms": {
+        "description": "帮助菜单显示按钮的平台",
+        "type": "list",
+        "default": [
+          "qq_official",
+          "qq_official_webhook",
+          "telegram",
+          "discord",
+          "kook",
+          "lark",
+          "slack",
+          "dingtalk",
+          "webchat"
+        ],
+        "hint": "这些平台上的帮助菜单附带分类按钮，点一下就能切换分类（需要 AstrBot 4.29 及以上）。QQ 个人号（aiocqhttp）不支持按钮，回复序号即可。按钮不显示或菜单发不出去时，把对应平台删掉；清空则不用按钮"
+      },
       "text_max_rows": {
         "description": "文本 / Markdown 每个表格最多行数",
         "type": "int",
@@ -93,27 +109,6 @@
         ],
         "hint": "自动：已安装 playwright 时用本地浏览器渲染（找不到 Chromium 会改用系统 Edge/Chrome），否则用 AstrBot 文转图服务。本地渲染通常 3~5 秒，公共 t2i 服务 4~20 秒",
         "invisible": true
-      },
-      "image_theme": {
-        "description": "图片主题",
-        "type": "string",
-        "default": "fog",
-        "options": [
-          "dark",
-          "graphite",
-          "fog",
-          "silver",
-          "warm",
-          "light"
-        ],
-        "labels": [
-          "炭黑",
-          "石墨灰",
-          "雾灰（推荐）",
-          "银灰",
-          "暖灰",
-          "浅色"
-        ]
       },
       "show_tips": {
         "description": "显示指令引导",
@@ -300,6 +295,12 @@
         "secret": true,
         "hint": "推荐管理员发送 /lol WeGame登录（QQ）或 /lol WeGame登录 微信，用手机扫码后自动填写。也可手动填写：浏览器登录 wegame.com.cn 后，在开发者工具 → Application → Cookies 复制 tgp_id 和 tgp_ticket，按 tgp_id=…; tgp_ticket=… 填写（也可粘贴整串 Cookie）。凭证会过期，过期后重新扫码或复制；建议用小号"
       },
+      "wegame_auto_relogin": {
+        "description": "WeGame 凭证自动续期提醒",
+        "type": "bool",
+        "default": true,
+        "hint": "每 30 分钟检查一次凭证（同时保持凭证处于使用中）。快过期时提醒；过期后自动把新的登录二维码发到上次扫码的会话，扫码即可续期。手动填写的凭证需要先用 /lol WeGame登录 扫码一次，插件才知道发到哪里"
+      },
       "bridge_token": {
         "description": "远程国服代理 Token（旧版）",
         "type": "string",
@@ -332,6 +333,12 @@
         "type": "list",
         "default": [],
         "hint": "没有订阅赛事的会话发送 /lol 赛程、赛果、赛况时默认只看这些，例如 S赛、LPL、LCK；留空显示全部。已订阅的会话按订阅的赛事显示"
+      },
+      "posters": {
+        "description": "赛事海报（可选）",
+        "type": "text",
+        "default": "",
+        "hint": "图片卡片顶部横幅的底图，每行一个：赛事=图片地址，例如 LPL=https://example.com/lpl.jpg。图片会自动压暗并叠上队伍色；没填的赛事用联赛主题色和联赛标志自动生成"
       }
     }
   },
@@ -349,16 +356,30 @@
         "type": "int",
         "default": 5
       },
+      "match_detail": {
+        "description": "战绩推送样式",
+        "type": "string",
+        "default": "detail",
+        "options": [
+          "detail",
+          "compact"
+        ],
+        "labels": [
+          "详细（双方 10 人数据）",
+          "简略（只看本人）"
+        ],
+        "hint": "详细：推送这局双方 10 人的 KDA、伤害、经济和装备；简略：推送一行本人战绩"
+      },
       "esports_remind_min": {
         "description": "开赛前多少分钟提醒",
         "type": "int",
         "default": 30
       },
       "esports_game_data": {
-        "description": "赛果推送附带每局数据",
+        "description": "赛事推送附带每局数据",
         "type": "bool",
         "default": true,
-        "hint": "开启时等 OP.GG 发布每局阵容和数据后再推送（最多等 40 分钟）；关闭则比赛结束立即只推比分"
+        "hint": "开启时每打完一局推送该局双方 10 人的详细数据卡片，整场结束再推送整场赛况（等待 OP.GG 发布数据，最多 40 分钟）；关闭则只推比分"
       },
       "daily_hour": {
         "description": "日报推送时刻（0-23 点）",
@@ -382,6 +403,119 @@
         "default": 5,
         "invisible": true,
         "hint": "平时的检查间隔；比赛进行中或即将开赛时自动改为每分钟检查"
+      }
+    }
+  },
+  "ai": {
+    "description": "AI 点评",
+    "type": "object",
+    "hint": "用 AstrBot 已配置的大模型点评单局、近期战绩和比赛。点评只依据插件取到的数据",
+    "items": {
+      "enabled": {
+        "description": "启用 AI 点评",
+        "type": "bool",
+        "default": true
+      },
+      "provider_id": {
+        "description": "使用的模型",
+        "type": "string",
+        "default": "",
+        "_special": "select_provider",
+        "hint": "留空则跟随当前会话正在使用的模型"
+      },
+      "style": {
+        "description": "默认风格",
+        "type": "string",
+        "default": "专业",
+        "options": [
+          "专业",
+          "幽默",
+          "锐评"
+        ],
+        "labels": [
+          "专业（解说 / 教练口吻）",
+          "幽默（轻松调侃）",
+          "锐评（直接犀利，不做人身攻击）"
+        ],
+        "hint": "指令后加风格可临时切换，例如 /lol 点评 锐评"
+      },
+      "cooldown_sec": {
+        "description": "冷却时间（秒）",
+        "type": "int",
+        "default": 60,
+        "hint": "同一个人两次点评之间的最短间隔；命中缓存（同一局同一风格）不受限制"
+      },
+      "recent_games": {
+        "description": "近期诊断局数",
+        "type": "int",
+        "default": 15,
+        "hint": "/lol 诊断 默认分析的对局数，5~20",
+        "invisible": true
+      },
+      "push_match": {
+        "description": "战绩推送附带 AI 点评",
+        "type": "bool",
+        "default": false,
+        "hint": "每次推送都会调用模型，消耗额度"
+      },
+      "push_esports": {
+        "description": "赛事推送附带 AI 点评",
+        "type": "bool",
+        "default": false,
+        "hint": "每局数据卡片和整场赛况都会附带点评，消耗额度"
+      }
+    }
+  },
+  "group": {
+    "description": "群玩法",
+    "type": "object",
+    "hint": "在群里绑定账号或用自己的绑定查询过的成员会自动加入本群榜单，发送 /lol 下榜 可退出",
+    "items": {
+      "enabled": {
+        "description": "启用群玩法",
+        "type": "bool",
+        "default": true,
+        "hint": "日榜 / 周榜、群友播报、段位变动、竞猜、猜英雄、分队等"
+      },
+      "daily_hour": {
+        "description": "日榜推送时刻",
+        "type": "int",
+        "default": 23,
+        "hint": "0~23 点，当天有群友打过才推送"
+      },
+      "weekly_hour": {
+        "description": "周榜推送时刻（周日）",
+        "type": "int",
+        "default": 22
+      },
+      "broadcast": {
+        "description": "群友播报（默认值）",
+        "type": "bool",
+        "default": true,
+        "hint": "群友一起开黑、打出五杀 / 超神 / 惨案、连胜连败时自动播报；各群可用 /lol 群播报 开|关 单独设置"
+      },
+      "broadcast_interval_min": {
+        "description": "群友播报检查间隔（分钟）",
+        "type": "int",
+        "default": 15,
+        "hint": "最短 5 分钟；群里绑定的人多时不建议调太短"
+      },
+      "rank_change": {
+        "description": "日榜附带段位变动",
+        "type": "bool",
+        "default": true
+      },
+      "ai_weekly": {
+        "description": "周榜附带 AI 周报",
+        "type": "bool",
+        "default": true,
+        "hint": "需开启 AI 点评；每周每群调用一次模型"
+      },
+      "quiz_seconds": {
+        "description": "猜英雄作答时间（秒）",
+        "type": "int",
+        "default": 60,
+        "invisible": true
       }
     }
   },

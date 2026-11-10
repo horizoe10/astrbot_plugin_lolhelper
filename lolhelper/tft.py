@@ -11,8 +11,14 @@ from .fmt import TFT_TIER_PILL, big, freshness, num, pct, rank_cls, relative_cls
 from .service import OpggService, View
 
 AUGMENT_TIERS = {"silver": "白银", "gold": "黄金", "prismatic": "棱彩", "platinum": "棱彩"}
+AUGMENT_PILL = {"silver": "tp ag-s", "gold": "tp ag-g", "prismatic": "tp ag-p", "platinum": "tp ag-p"}
 OP_TIER_CLS = TFT_TIER_PILL
 TRAIT_STYLE = {1: "铜", 2: "银", 3: "金", 4: "彩", 5: "彩", 6: "独"}
+UNIT_NOTE = "★ 为核心棋子 · 边框颜色代表费用"
+
+
+def _aug_tier(h: dict) -> str:
+    return str(h.get("tier") or "").lower()
 
 
 class TftService:
@@ -23,6 +29,29 @@ class TftService:
 
     async def _ready(self) -> None:
         await self.gd.ensure_tft(self.mcp)
+
+    async def _art(self, api: str | None, banner: bool = True) -> str | None:
+        """Banner art for a unit: its current-set art, else the League splash for League champions, else (banner)
+        the season banner. League data is only needed for the splash, so a failure there just skips it."""
+        art = self.gd.tft_art(api)
+        if not art:
+            try:
+                await self.gd.ensure_lol()
+                art = self.gd.tft_splash(api)
+            except Exception:
+                art = None
+        return art or (self.gd.tft_banner()[0] if banner else None)
+
+    def _season_banner(self, hero: dict) -> bool:
+        """Put the season banner and Chinese season logo on a centered banner; False when the set has none."""
+        bg, logo = self.gd.tft_banner()
+        if bg:
+            hero.update({"art": bg, "wide": True, "slogo": logo})
+        return bool(bg)
+
+    def _cost_cls(self, api: str | None, prefix: str = "u") -> str:
+        cost = self.gd.tft_champion_cost(api) if api else None
+        return f"{prefix}{min(int(cost), 5)}" if cost else ""
 
     def _enum(self, tool: str, prop: str) -> list[str] | None:
         t = self.mcp.tools.get(self.mcp.tool_name(tool))
@@ -37,7 +66,8 @@ class TftService:
         items = items or []
         sub = "、".join(self.gd.tft_item_name(i) for i in items)  # text / markdown output
         icons = [u for u in (self.gd.tft_item_icon(i) for i in items) if u]  # image output
-        return Cell(name, img=self.gd.tft_champion_icon(unit_key), cls="gold" if core else "", sub=sub, imgs=icons)
+        cls = " ".join(x for x in (self._cost_cls(unit_key), "core" if core else "") if x)
+        return Cell(name, img=self.gd.tft_champion_icon(unit_key), cls=cls, sub=sub, imgs=icons)
 
     def _unit_icons(self, units: list[dict], key: str = "key") -> list:
         out = []
@@ -45,7 +75,8 @@ class TftService:
             api = u.get(key) or u.get("characterId") or u.get("key")
             icon = self.gd.tft_champion_icon(api) if api else None
             if icon:
-                out.append({"src": icon, "cls": "core"} if u.get("isCore") else icon)
+                cls = " ".join(x for x in (self._cost_cls(api, "c"), "core" if u.get("isCore") else "") if x)
+                out.append({"src": icon, "cls": cls} if cls else icon)
         return out
 
     async def _decks(self) -> tuple[list[dict], float, dict]:
@@ -58,15 +89,17 @@ class TftService:
     def _deck_name(self, deck: dict) -> str:
         name = deck.get("name")
         if isinstance(name, dict):
-            return name.get("zh_CN") or name.get("en_US") or next(iter(name.values()), "?")
-        return str(name or "?")
+            name = name.get("zh_CN") or name.get("en_US") or next(iter(name.values()), "?")
+        return self.gd.tft_localize(str(name or "?"))
 
     async def meta(self, limit: int = 10) -> View:
         await self._ready()
         decks, created, meta = await self._decks()
-        doc = Doc(title="云顶之弈 · 版本强势阵容", subtitle=f"S{self.gd.tft.get('set', '?')} · {self.gd.tft.get('version') or ''}".strip(" ·"), theme="tft")
+        season = f"S{self.gd.tft.get('set', '?')} · {self.gd.tft.get('version') or ''}".strip(" ·")
+        doc = Doc(title="云顶之弈 · 版本强势阵容", subtitle=season, theme="tft", width=820)
+        doc.hero = {"layout": "center", "eyebrow": "TEAMFIGHT TACTICS", "title": "版本强势阵容", "range": season}
         if meta.get("gameStatCounts"):
-            doc.badge(f"统计样本 {big(meta['gameStatCounts'])} 局")
+            doc.badge(f"统计样本 {big(meta['gameStatCounts'])} 局", "acc")
         rows = []
         shown = decks[:limit]
         colours = relative_cls([dig(d, "stat.deck.avgPlacement") for d in shown])
@@ -85,7 +118,11 @@ class TftService:
                 pct(st.get("top4Rate")),
                 pct(st.get("winRate")),
             ])
-        doc.add_table("", ["#", "阵容", "评级", "均名", "前四", "登顶"], rows, note="金框 / ★ 为核心棋子")
+        doc.add_table("", ["#", "阵容", "评级", "均名", "前四", "登顶"], rows, note=UNIT_NOTE, style="top3")
+        if not self._season_banner(doc.hero) and shown:
+            units = shown[0].get("units") or []
+            carry = next((u for u in units if u.get("isCore")), units[0] if units else {})
+            doc.hero.update({"art": await self._art(carry.get("key"), banner=False), "vivid": True})
         doc.tip("/tft 阵容 1", "第 1 名阵容的装备、羁绊与运营")
         top_units = [u for u in (shown[0].get("units") if shown else []) or [] if u.get("isCore")]
         if top_units:
@@ -103,19 +140,30 @@ class TftService:
         d = decks[index - 1]
         st = dig(d, "stat.deck", {}) or {}
         tier = dig(d, "stat.opTier", "") or ""
-        doc = Doc(title=self._deck_name(d), subtitle=f"版本阵容第 {index} 名", theme="tft")
+        doc = Doc(title=self._deck_name(d), subtitle=f"版本阵容第 {index} 名", theme="tft", width=820)
         units = d.get("units") or []
         core = next((u for u in units if u.get("isCore")), units[0] if units else None)
         if core:
             doc.icon = self.gd.tft_champion_icon(core["key"])
         if tier:
-            doc.badge(f"评级 {tier}", OP_TIER_CLS.get(tier, ""))
-        doc.badge(f"均名 {num(st.get('avgPlacement'))}")
-        doc.badge(f"前四 {pct(st.get('top4Rate'))}")
-        doc.badge(f"登顶 {pct(st.get('winRate'))}")
-        doc.badge(f"出场 {pct(st.get('pickRate'), 2)}")
-        doc.add_tiles("最终阵容", [self._unit_cell(u["key"], u.get("items"), u.get("isCore"), u.get("tier")) for u in units if u.get("key")])
-        traits = sorted(d.get("traits") or [], key=lambda t: (-(t.get("style") or 0), -(t.get("numUnits") or 0)))
+            doc.badge(f"评级 {tier}", "hx " + OP_TIER_CLS.get(tier, ""))
+        doc.badge(f"均名 {num(st.get('avgPlacement'))}", "hx")
+        doc.badge(f"前四 {pct(st.get('top4Rate'))}", "hx")
+        doc.badge(f"登顶 {pct(st.get('winRate'))}", "hx")
+        doc.badge(f"出场 {pct(st.get('pickRate'), 2)}", "hx")
+        traits_on = sorted((t for t in d.get("traits") or [] if t.get("key") and (t.get("style") or 0) > 0),
+                           key=lambda t: (-(t.get("style") or 0), -(t.get("numUnits") or 0)))
+        doc.hero = {
+            "art": await self._art(core["key"]) if core else None, "icon": doc.icon, "name": self._deck_name(d),
+            "chips": [{"text": f"版本第 {index} 名", "cls": "acc"}]
+                     + [{"text": f"{self.gd.tft_trait_name(t['key'])} {t.get('numUnits', '')}", "img": self.gd.tft_trait_icon(t["key"])}
+                        for t in traits_on[:3]],
+            "side": {"small": "评级", "big": tier, "cls": OP_TIER_CLS.get(tier, "").replace("tp ", "")} if tier else None,
+            "stats": [{"v": num(st.get("avgPlacement")), "k": "平均名次"}, {"v": pct(st.get("top4Rate")), "k": "前四率"},
+                      {"v": pct(st.get("winRate")), "k": "登顶率"}, {"v": pct(st.get("pickRate"), 2), "k": "出场率"}],
+        }
+        doc.add_tiles("最终阵容", [self._unit_cell(u["key"], u.get("items"), u.get("isCore"), u.get("tier")) for u in units if u.get("key")],
+                      note=UNIT_NOTE)
         doc.add_tiles(
             "羁绊",
             [
@@ -125,8 +173,7 @@ class TftService:
                     cls=f"trait s{min(int(t.get('style') or 1), 6)}",
                     sub=TRAIT_STYLE.get(t.get("style"), ""),
                 )
-                for t in traits
-                if t.get("key") and (t.get("style") or 0) > 0
+                for t in traits_on
             ],
         )
         stages = []
@@ -170,11 +217,20 @@ class TftService:
             subtitle=" · ".join(x for x in [f"{cost} 费" if cost else "", " / ".join(champ_meta.get("traits") or [])] if x),
             icon=self.gd.tft_champion_icon(api),
             theme="tft",
+            width=820,
         )
         total = builds[0].get("totalChampionCount")
         if total:
-            doc.badge(f"样本 {big(total)} 次登场")
+            doc.badge(f"样本 {big(total)} 次登场", "hx")
         best = builds[0]
+        doc.hero = {
+            "art": await self._art(api), "icon": doc.icon, "name": doc.title,
+            "chips": [{"text": t} for t in champ_meta.get("traits") or []],
+            "side": {"small": "费用", "big": str(cost), "cls": f"u{min(int(cost), 5)}"} if cost else None,
+            "stats": [x for x in [{"v": big(total), "k": "登场次数"} if total else None,
+                                  {"v": num(best.get("avgPlacement")), "k": "常用出装 · 均名"},
+                                  {"v": pct(best.get("top4Rate")), "k": "前四率"}, {"v": pct(best.get("winRate")), "k": "登顶率"}] if x],
+        }
         doc.add_tiles(
             "最常用三件套",
             [Cell(self.gd.tft_item_name(i), img=self.gd.tft_item_icon(i)) for i in best.get("itemNames") or []],
@@ -212,14 +268,28 @@ class TftService:
             raise NotFoundError(f"暂无 {self.gd.tft_item_name(api)} 的数据")
         it = (self.gd.tft.get("items") or {}).get(api, {})
         recipe = " + ".join(self.gd.tft_item_name(x) for x in it.get("from") or [])
-        doc = Doc(title=self.gd.tft_item_name(api), subtitle=f"合成：{recipe}" if recipe else "最适合的英雄", icon=self.gd.tft_item_icon(api), theme="tft")
+        doc = Doc(title=self.gd.tft_item_name(api), subtitle=f"合成：{recipe}" if recipe else "最适合的英雄", icon=self.gd.tft_item_icon(api),
+                  theme="tft", width=820)
         rows = []
         shown = rows_raw[:15]
+        top_cid = (shown[0].get("characterId") or "") if shown else ""
+        art = None
+        for r in shown[:5]:  # set-only units (no League champion) have no splash; use the next carrier's
+            art = await self._art(r.get("characterId"), banner=False)
+            if art:
+                break
+        art = art or self.gd.tft_banner()[0]
+        doc.hero = {
+            "art": art, "icon": doc.icon, "name": doc.title, "sub": "合成" if it.get("from") else "",
+            "chips": [{"text": self.gd.tft_item_name(x), "img": self.gd.tft_item_icon(x)} for x in it.get("from") or []],
+            "side": {"small": "最佳携带", "big": self.gd.tft_champion_name(top_cid), "sub": f"均名 {num(shown[0].get('avgPlacement'))}"}
+            if top_cid else None,
+        }
         colours = relative_cls([r.get("avgPlacement") for r in shown])
         for r, colour in zip(shown, colours):
             cid = r.get("characterId", "")
             rows.append([
-                Cell(self.gd.tft_champion_name(cid), img=self.gd.tft_champion_icon(cid)),
+                Cell(self.gd.tft_champion_name(cid), img=self.gd.tft_champion_icon(cid), cls=self._cost_cls(cid, "c")),
                 Cell(num(r.get("avgPlacement")), cls=colour),
                 pct(r.get("top4Rate")),
                 pct(r.get("winRate")),
@@ -244,21 +314,33 @@ class TftService:
             hits = [r for r in rows if q in strip_html(r.get("desc")).lower()]
         if not hits:
             raise NotFoundError(f"没有找到包含「{query}」的强化符文")
+        try:
+            await self._ready()  # the season banner comes with the TFT static data
+        except Exception:
+            pass
         doc = Doc(title=f"强化符文 · {query}", subtitle=f"共找到 {len(hits)} 个", theme="tft")
         if len(hits) == 1:
             doc.icon = hits[0].get("imageUrl")
+            doc.hero = {"name": hits[0].get("name") or query, "sub": f"强化符文 · {AUGMENT_TIERS.get(_aug_tier(hits[0]), '')}".strip(" ·"),
+                        "art": self.gd.tft_banner()[0]}
+        else:
+            doc.hero = {"layout": "center", "eyebrow": "AUGMENTS", "title": f"强化符文 · {query}",
+                        "range": f"找到 {len(hits)} 个" + (f"，显示前 {limit} 个" if len(hits) > limit else "")}
+            self._season_banner(doc.hero)
         doc.add_table(
             "",
             ["强化符文", "阶级"],
             [
                 [
                     Cell(h.get("name") or "?", img=h.get("imageUrl"), sub=strip_html(h.get("desc"))),
-                    AUGMENT_TIERS.get(str(h.get("tier")).lower(), h.get("tier") or "-"),
+                    Cell(AUGMENT_TIERS.get(_aug_tier(h), h.get("tier") or "-"), cls=AUGMENT_PILL.get(_aug_tier(h), "")),
                 ]
                 for h in hits[:limit]
             ],
         )
         doc.tip("/tft 阵容", "版本强势阵容")
+        doc.tip("/tft 阵容 1", "第 1 名阵容的装备、羁绊与运营")
+        doc.tip("/tft 装备 无尽之刃", "这件装备最适合给谁")
         doc.footer = freshness(created)
         return View("tft_augment", {"query": query, "augments": hits[:limit]}, doc, created)
 

@@ -19,6 +19,21 @@ def test_parse_leagues_multi_and_aliases():
     assert parse_leagues(["lpl", "LPL"]) == (["lpl"], [])
 
 
+def test_league_icons_and_banner_backdrop():
+    from lolhelper.constants import league_backdrop, set_league_posters
+
+    lpl = league_info("LPL")
+    assert lpl["logo"].startswith("https://static.lolesports.com/leagues/")  # colour icon from LoL Esports
+    assert league_backdrop(lpl) == {"wm": "https://s-qwer.op.gg/images/symbols/LPL@white.png"}  # one-colour watermark
+    assert league_backdrop(league_info("Worlds"))["wm"] == league_info("Worlds")["logo"]
+    assert league_backdrop(league_info("Unknown Cup")) == {"wm": "mark"}
+    set_league_posters({"lpl": "https://x/lpl.jpg"})
+    try:
+        assert league_backdrop(lpl) == {"art": "https://x/lpl.jpg"}
+    finally:
+        set_league_posters({})
+
+
 def test_sub_league_list_old_and_new_forms():
     assert sub_league_list({"target": {"league": "lpl"}}) == ["lpl"]
     assert sub_league_list({"target": {"leagues": ["worlds", "lpl"]}}) == ["worlds", "lpl"]
@@ -54,3 +69,21 @@ def test_normalize_and_series_row(gd):
     row, line = series_row(n, {"homeTeam": {"id": "1681", "acronym": "DK"}}, gd)
     assert row["home"]["label"] == "DK" and row["home"]["lose"] and row["away"]["win"]
     assert row["mvp"]["name"] == "Bin" and "BLG 胜" in line
+
+
+def test_role_bound_slot(gd):
+    """esports lists the role-bound slot among the items; it can hold boots (bot lane) or a control ward (support)."""
+    from lolhelper.game import _slots
+
+    g = _game()
+    sup, adc, jng = g["players"]
+    sup.update(items=[2055, 3364, 3158, 3869, 2055], roleBoundItem=2055)  # the second ward was bought into a normal slot
+    adc.update(position="adc", items=[1038, 3363, 3047, 3078, 6676, 3042, 1086, 1037], roleBoundItem=3047)
+    jng.update(position="jun", items=[1036, 3364, 6333, 1205, 3071], roleBoundItem=1209)  # another id of the jungle reward
+    by = {p["game_name"]: p for t in normalize_esports_game(g, gd)["teams"] for p in t["players"]}
+    bot = by["Bin"]
+    assert bot["role_item"] == 3047 and 3047 not in bot["items"]
+    slots = _slots(bot["items"], gd, bot["role_item"])
+    assert len(slots) == 8 and all(slots[:6]) and slots[6].endswith("/3363.png") and slots[7].endswith("/3047.png")
+    assert by["ON"]["role_item"] == 2055 and by["ON"]["items"].count(2055) == 1
+    assert by["ShowMaker"]["role_item"] == 1209 and 1205 not in by["ShowMaker"]["items"]

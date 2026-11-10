@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 from .log import default_logger
-from .doc import Doc
+from .doc import Cell, Doc
 from .errors import LolHelperError
 from .fmt import get_tz, local_time, parse_time
 from .constants import stage_zh
@@ -32,6 +32,9 @@ class PushManager:
         self.logger = logger or default_logger
         self._task: asyncio.Task | None = None
         self._last: dict[str, float] = {}
+        self.hooks: list[Callable[[], Awaitable[None]]] = []  # extra periodic jobs (e.g. WeGame keep-alive)
+        # optional AI review: await ai_hook(kind, view, ctx) adds a review section to the view before it is sent
+        self.ai_hook: Callable[[str, View, dict], Awaitable[None]] | None = None
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -66,6 +69,13 @@ class PushManager:
 
     async def tick(self) -> None:
         s = self.f.s
+        for hook in self.hooks:
+            try:
+                await hook()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger.exception("[lolhelper] 后台任务出错")
         if not s.push_enabled:
             return
         store = self.f.store
@@ -78,6 +88,14 @@ class PushManager:
             await self.check_esports()
         if store.subs(kind="lol_daily") or store.subs(kind="tft_daily") or store.subs(kind="esports"):
             await self.check_daily()
+
+    async def _with_ai(self, kind: str, view: View, ctx: dict) -> None:
+        if self.ai_hook is None:
+            return
+        try:
+            await self.ai_hook(kind, view, ctx)
+        except Exception as exc:  # a failed review never blocks the push itself
+            self.logger.info(f"[lolhelper] 推送附带 AI 点评失败：{exc}")
 
     async def _broadcast(self, umos: list[str], view: View) -> None:
         for umo in dict.fromkeys(umos):
@@ -112,11 +130,13 @@ class PushManager:
                 continue
             self.f.store.set_state(state_key, (ids + [i for i in seen if i not in ids])[:30])
             for m in reversed(new[: self.f.s.push_max_new_matches]):
-                await self._broadcast(g["umos"], await self.match_view(g["account"], m))
+                view = await self.match_view(g["account"], m)
+                await self._with_ai("match", view, {"account": g["account"], "match": m})
+                await self._broadcast(g["umos"], view)
             await asyncio.sleep(1)
 
     async def match_view(self, account: dict, m: dict) -> View:
-        from .game import add_match_cards, minimal_game
+        from .game import add_match_cards, game_hero, minimal_game
 
         game = m.get("_game")
         if not game and account.get("kind") != "cn":
@@ -127,21 +147,67 @@ class PushManager:
         game = game or minimal_game(m)
         res = str(m.get("result") or "").upper()
         word = {"WIN": "赢下了一局", "LOSE": "输掉了一局"}.get(res, "结束了一局")
+        if self.f.s.push_match_detail:
+            try:
+                view = await self.detail_match_view(account, m, game, word)
+                if view is not None:
+                    return view
+            except Exception as exc:  # fall back to the compact card
+                self.logger.info(f"[lolhelper] {account_label(account)} 对局详情获取失败，改推简略卡片：{exc}")
         doc = Doc(
             title=f"{account.get('game_name')}#{account.get('tag_line')} {word}",
             subtitle=account_label(account),
             icon=self.f.gd.champ_icon(self.f.gd.champion(m.get("champion_id"))) if m.get("champion_id") else None,
             theme="cn" if account.get("kind") == "cn" else "lol",
-            width=880,
+            width=920,
         )
+        hero = game_hero(game, self.f.gd, self.f.s.timezone)
+        if hero:  # list-only games have no names on the player, so take them from the subscription
+            hero.update({"name": account.get("game_name") or hero["name"], "sub": word,
+                         "tag": f"#{account['tag_line']}" if account.get("tag_line") else ""})
+            doc.hero = hero
         add_match_cards(doc, "", [game], self.f.gd)
         doc.footer = f"对局时间 {local_time(m.get('created_at'), self.f.s.timezone)}"
-        doc.tip("/lol 对局", "这局的双方 10 人数据")
+        doc.tip(self._game_cmd(account), "这局的双方 10 人数据")
         if m.get("champion_name"):
             doc.tip(f"/lol 英雄 {str(m['champion_name']).split(' ')[0]}", "这个英雄的出装")
         doc.tip("/lol 战绩", "最近战绩")
         match = {k: v for k, v in m.items() if k != "_game"}
         return View("push_match", {"account": account, "match": match}, doc, time.time())
+
+    @staticmethod
+    def _who(account: dict) -> str:
+        return f"{account.get('game_name')}#{account.get('tag_line')}"
+
+    def _game_cmd(self, account: dict) -> str:
+        """/lol 对局 for the subscribed account (not the sender's own binding)."""
+        if account.get("kind") == "cn":
+            return "/lol 对局"
+        return f"/lol 对局 1 {self._who(account)} {account.get('region') or ''}".rstrip()
+
+    async def detail_match_view(self, account: dict, m: dict, game: dict, word: str) -> View | None:
+        """Both teams' 10 players for a newly finished game of a subscribed account."""
+        from .game import build_game_view
+
+        cn = account.get("kind") == "cn"
+        if cn:
+            game = await self.f.cn.match_detail(account, m)
+        players = [p for t in game.get("teams") or [] for p in t.get("players") or []]
+        if len(players) < 2 or not any(p.get("is_target") for p in players):
+            return None
+        view = build_game_view(game, self.f.gd, "cn" if cn else "lol", self.f.s.timezone, time.time())
+        doc = view.doc
+        doc.title = f"{self._who(account)} {word}" + (f" · {game.get('queue')}" if game.get("queue") else "")
+        parts = [x for x in doc.subtitle.split(" · ") if x and x != self._who(account)]
+        doc.subtitle = " · ".join([account_label(account)] + parts)
+        doc.footer = f"对局时间 {local_time(m.get('created_at'), self.f.s.timezone)}" + (
+            " · 数据来自 WeGame" if game.get("source") == "wegame" else " · 数据来自国服客户端" if cn else "")
+        doc.tips = []
+        if m.get("champion_name"):
+            doc.tip(f"/lol 英雄 {str(m['champion_name']).split(' ')[0]}", "这个英雄的出装")
+        doc.tip("/lol 战绩" if cn else f"/lol 战绩 {self._who(account)} {account.get('region') or ''}".rstrip(), "TA 的最近战绩")
+        match = {k: v for k, v in m.items() if k != "_game"}
+        return View("push_match", {"account": account, "match": match, "detail": True, "game": game}, doc, time.time())
 
     # ------------------------------------------------------------------ esports
     async def check_esports(self) -> None:
@@ -203,6 +269,10 @@ class PushManager:
                         if now - pending[str(g.get("id"))] < 40 * 60:
                             continue
                         view = self.esports_view(g, "比赛结束")
+                    elif self.f.s.push_esports_game_data:
+                        await self.push_game_cards(g, umos)  # games not pushed while live, e.g. the decider
+                    if view.kind == "lol_esports_match":
+                        await self._with_ai("series", view, {"match": g, "games": (view.data or {}).get("games") or []})
                     await self._broadcast(umos, view)
             resulted.add(g.get("id"))
             pending.pop(str(g.get("id")), None)
@@ -276,6 +346,11 @@ class PushManager:
             last = max((int(x.get("set") or 0) for x in done), default=0)
             if last <= int(pushed.get(str(gid), 0)):
                 continue
+            if self.f.s.push_esports_game_data:
+                store.set_state("esports_game_pushed", pushed)
+                await self.push_game_cards(cur, targets(g), played)
+                pushed = dict(store.state("esports_game_pushed", {}) or {})
+                continue
             pushed[str(gid)] = last
             h = (cur.get("homeTeam") or {}).get("acronym") or "?"
             a = (cur.get("awayTeam") or {}).get("acronym") or "?"
@@ -283,6 +358,47 @@ class PushManager:
             await self._broadcast(targets(g), view)
         store.set_state("esports_game_pushed", dict(list(pushed.items())[-100:]))
         return live
+
+    async def push_game_cards(self, g: dict, umos: list[str], played: list[dict] | None = None) -> int:
+        """Push the detail card (both teams' 10 players) of every finished game not pushed yet."""
+        from .esports import build_esports_game_view
+
+        store = self.f.store
+        gid = str(g.get("id"))
+        if played is None:
+            try:
+                played, _ = await self.f.svc.esports_series_games(g)
+            except LolHelperError as exc:
+                self.logger.info(f"[lolhelper] 获取每局数据失败：{exc}")
+                return 0
+        await self.f.gd.ensure_lol()
+        pushed = dict(store.state("esports_game_pushed", {}) or {})
+        done = sorted((x for x in played if x.get("finished") and x.get("players")), key=lambda x: int(x.get("set") or 0))
+        home, away = g.get("homeTeam") or {}, g.get("awayTeam") or {}
+        h, a = home.get("acronym") or "?", away.get("acronym") or "?"
+        hs = as_ = sent = 0
+        for gm in done:
+            win = str((gm.get("winner") or {}).get("id") or "")
+            win_acr = str((gm.get("winner") or {}).get("acronym") or "")
+            if win and win == str(home.get("id")) or (not win and win_acr == h):
+                hs += 1
+            elif win or win_acr:
+                as_ += 1
+            n = int(gm.get("set") or 0)
+            if n <= int(pushed.get(gid, 0)):
+                continue
+            try:
+                view = build_esports_game_view(g, gm, self.f.gd, self.f.svc.cfg.timezone, time.time(), games=done)
+            except LolHelperError as exc:
+                self.logger.info(f"[lolhelper] 第{n}局数据不完整：{exc}")
+                break
+            view.doc.badges.insert(0, Cell(text=f"第{n}局结束 · 大比分 {h} {hs}:{as_} {a}", cls="win"))
+            await self._with_ai("esports_game", view, {"match": {**g, "homeScore": hs, "awayScore": as_}, "game": gm})
+            await self._broadcast(umos, view)
+            pushed[gid] = n
+            sent += 1
+        store.set_state("esports_game_pushed", dict(list(pushed.items())[-100:]))
+        return sent
 
     async def result_view(self, g: dict) -> View | None:
         """Series card with per-game stats, or None while OP.GG has not published every game yet."""
@@ -308,9 +424,12 @@ class PushManager:
         doc.subtitle = " · ".join(x for x in [info["full"], stage] if x)
         if not doc.icon:
             doc.icon, doc.icon_logo = home.get("image_url"), True
-        doc.badge(headline, "accent")
+        doc.badge(headline, "accent hx")
+        from .esports import series_hero
+
+        doc.hero = series_hero(g, self.f.s.timezone, headline)
         row, line = versus_row(g, self.f.s.timezone)
-        doc.add_block("", "versus", {"rows": [row]}, [line])
+        doc.add_block("", "versus", {"rows": [row]}, [line], style="hide")  # the scoreboard banner shows it
         ref = h or ""
         if g.get("status") == "FINISHED":
             doc.tip(f"/lol 赛况 {ref}", "每局阵容与数据")

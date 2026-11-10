@@ -1,4 +1,4 @@
-# 国服远程代理 v1.2
+# 国服远程代理 v1.3
 
 > 💡 AstrBot 和国服客户端在**同一台 Windows 电脑**上时不需要这个代理，插件会直接连接本机客户端。
 
@@ -38,6 +38,7 @@ AstrBot 部署在云服务器、Docker 或 NAS 上时，在登录着国服客户
 | `/v1/ranked?puuid=&server=` | 段位，只能查当前大区 |
 | `/v1/matches?puuid=&server=&start=&count=` | 战绩，可以跨区（SGP 失败时退回 LCU） |
 | `/v1/game?game_id=&server=` | 单局详情 |
+| `/v1/timeline?game_id=&server=` | 单局时间线（经济、击杀、资源事件），用于 AI 点评；SGP 失败时退回 LCU |
 | `/v1/lcu?path=` | 透传 LCU GET 请求，默认关闭（`allow_raw_lcu`） |
 
 ## 配置 bridge.json
