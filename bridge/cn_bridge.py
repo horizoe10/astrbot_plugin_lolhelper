@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""联盟助手国服本地代理 (China server bridge) v1.0
+"""联盟星枢国服本地代理 (China server bridge) v1.0
 
 OP.GG does not cover Tencent servers. This bridge runs on a Windows PC where
 the Tencent League client (WeGame) is logged in and exposes a small HTTP API
@@ -573,7 +573,7 @@ def load_config(path: Path) -> dict:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="联盟助手国服本地代理")
+    ap = argparse.ArgumentParser(description="联盟星枢国服本地代理")
     ap.add_argument("--config", default=str(Path(__file__).with_name("bridge.json")))
     ap.add_argument("--host")
     ap.add_argument("--port", type=int)

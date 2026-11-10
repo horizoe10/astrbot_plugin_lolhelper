@@ -263,9 +263,9 @@ async def main() -> int:
         ("tft 强化 贷款 -t", "tft_augment", "贷款"),
         ("tft 阵容 -i", "tft_meta", "<image"),
         ("lol 大区", "lol_regions", "艾欧尼亚"),
-        ("lol 状态", "lol_status", "联盟助手 v2.0.0"),
+        ("lol 状态", "lol_status", "联盟星枢 v2.1.0"),
         ("lol 帮助", "lol_help", "/lol 英雄"),
-        ("lol 帮助 赛事", "lol_help", "/lol 赛况 [序号|战队] [局号]"),
+        ("lol 帮助 赛事", "lol_help", "▸ 赛况　每局数据与 MVP"),
         ("lol 帮助 竞猜", "lol_help", "别名："),
         ("lol 帮助 全部", "lol_help", "全部指令"),
         ("lol 帮助 -i", "lol_help", "<image"),
@@ -308,6 +308,24 @@ async def main() -> int:
     ev = make_event("lol 战绩 -t", sender="20002", at="10001")
     out = "".join([describe(r) async for r in md.handler(plugin, ev)])
     check("Hide on bush" in out, "@mention uses the mentioned user's binding")
+
+    # "/lol 对局 3" after looking at someone else's matches means that player; "我" means the own account
+    real_target = plugin.f.account_from_target
+
+    async def fake_target(target):
+        return {"kind": "lol", "game_name": "Other", "tag_line": "T1", "region": "kr"}
+
+    plugin.f.account_from_target = fake_target
+    try:
+        other = await plugin._account_for(make_event("x", sender="10001"), ["Other#T1", "kr"])
+        follow = await plugin._account_for(make_event("x", sender="10001"), [], follow=True)
+        mine = await plugin._account_for(make_event("x", sender="10001"), ["我"], follow=True)
+        again = await plugin._account_for(make_event("x", sender="10001"), [], follow=True)
+        stranger = await plugin._account_for(make_event("x", sender="10001"), [])
+    finally:
+        plugin.f.account_from_target = real_target
+    check(follow is other and mine is not other and again is mine and stranger is mine,
+          "game index follows the player looked at last; 我 switches back")
 
     # LLM tool returns text
     txt = await plugin.llm_tier(make_event("x"), "中单")
@@ -407,9 +425,9 @@ async def main() -> int:
         return "\n".join(outs), ev.is_stopped()
 
     out, stopped = await compat("/lol 帮助", False)
-    check("联盟助手" in out and stopped, "compat: /lol without @ works")
+    check("联盟星枢" in out and stopped, "compat: /lol without @ works")
     out, _ = await compat("lol 帮助", False)
-    check("联盟助手" in out, "compat: bare lol sub-command without @ works")
+    check("联盟星枢" in out, "compat: bare lol sub-command without @ works")
     out, _ = await compat("／lol 大区", True)
     check("外服" in out, "compat: @bot + full-width slash works")
     out, _ = await compat("lol 笑死", False)
@@ -422,7 +440,20 @@ async def main() -> int:
     check(gf.filter(make_event("lol"), {}) is False and gf.filter(make_event("lol 战绩"), {}) is True,
           "guide: bare /lol no longer triggers AstrBot's command tree")
     out, stopped = await compat("lol", True)
-    check("主菜单" in out and "1. 📜 战绩与账号" in out and stopped, "guide: bare /lol shows the help menu")
+    check("主菜单" in out and "① 📜 战绩与账号" in out and stopped, "guide: bare /lol shows the help menu")
+    for grp, self_id in ((False, "unknown_selfid"), (True, "4242")):  # QQ official: placeholder At of the bot itself
+        ev = make_event("lol", platform="qq_official", group=grp, at="qq_official")
+        ev.message_obj.self_id = self_id
+        sent = []
+
+        async def keep(chain, _sent=sent):
+            _sent.append(chain)
+
+        ev.send = keep
+        out = "".join([describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)])
+        out += "".join(describe(c) for c in sent)
+        check("主菜单" in out and "对方还没有绑定" not in out, f"guide: bare /lol on QQ official ({'channel' if grp else 'private'}) shows the menu")
+    out, _ = await compat("lol", True)
     out, _ = await compat("3", False)
     check("🏆 赛事" in out and "/lol 赛程" in out, "guide: number reply opens a category")
     out, _ = await compat("0", False)
@@ -454,8 +485,8 @@ async def main() -> int:
     if hasattr(Comp, "ActionRow"):
         check(any(h.handler_name == "menu_button" and any(type(f).__name__ == "ButtonActionFilter" for f in h.event_filters)
                   for h in handlers), "guide: button handler registered")
-        rows = plugin._button_rows(plugin._guide_ctx(make_event("x")), None)
-        check(len(rows) == 2 and rows[0].buttons[0].id == "lolhelper:menu:account" and rows[0].fallback_text, "guide: menu buttons built")
+        rows = plugin._button_rows(mod.guide.main_buttons(plugin._guide_ctx(make_event("x"))))
+        check(len(rows) == 3 and all(len(r.buttons) <= 3 for r in rows) and rows[0].buttons[0].id == "lolhelper:menu:account" and rows[0].fallback_text, "guide: menu buttons built")
         ev = make_event("", platform="telegram")
         ev.message_obj.message = [Comp.ButtonInteraction(action_id="lolhelper:menu:esports", data={"k": "esports"}, interaction_id="1")]
         sent = []
@@ -466,7 +497,7 @@ async def main() -> int:
         ev.send = fake_send
         outs = [describe(r) async for r in plugin.menu_button(ev)]
         kinds = [type(c).__name__ for c in sent[0].chain] if sent else []
-        check(sent and "🏆 赛事" in sent[0].chain[0].text and "ActionRow" in kinds and not outs, f"guide: button click opens the category {kinds}")
+        check(sent and "赛事" in sent[0].chain[0].text and "/lol 赛程" in sent[0].chain[0].text and "ActionRow" in kinds and not outs, f"guide: button click opens the category {kinds}")
         ev = make_event("lol", platform="telegram")
         ev.send = fake_send
         sent.clear()
@@ -480,8 +511,85 @@ async def main() -> int:
         ev.send = broken_send
         out = "".join([describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)])
         check("主菜单" in out, "guide: menu falls back to text when buttons fail")
+
+        # card buttons: a click runs the card; buttons that need an argument wait for the next message
+        def click(action_id, data, sender="30003"):
+            ev = make_event("", platform="telegram", sender=sender)
+            ev.message_obj.message = [Comp.ButtonInteraction(action_id=action_id, data=data, interaction_id="2")]
+            ev.send = fake_send
+            return ev
+
+        sent.clear()
+        out = "".join([describe(r) async for r in plugin.menu_button(click("lolhelper:cmd:settings:4", mod.guide.cmd_data("/lol 状态")))])
+        check(f"联盟星枢 v{mod.VERSION}" in out, "guide: card button runs the command")
+        out = "".join([describe(r) async for r in plugin.menu_button(click("lolhelper:cmd:champ:0", mod.guide.cmd_data("/lol 英雄 ", "英雄名")))])
+        check("请发送英雄名" in out, "guide: argument button asks for input")
+        ev = make_event("亚索 -t", platform="telegram", sender="30003")
+        out = "".join([describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)])
+        check("疾风剑豪" in out and not plugin._input_wait, "guide: the next message completes the command")
+        sent.clear()
+        outs = [describe(r) async for r in plugin.menu_button(click("lolhelper:opt:standings", {"o": "standings"}))]
+        kinds = [type(c).__name__ for c in sent[0].chain] if sent else []
+        check(sent and "积分榜" in sent[0].chain[0].text and "ActionRow" in kinds, "guide: option button opens the choices")
+        if plugin._qq_event_cls is not None:
+            chain = mod.MessageChain(chain=[Comp.Plain("x"), *plugin._button_rows(mod.guide.category_buttons(mod.guide.CATEGORIES[2], mod.guide.Ctx()))])
+            kb = plugin._qq_event_cls._parse_keyboard(chain)
+            acts = {b["id"]: b["action"] for r in kb["content"]["rows"] for b in r["buttons"]}
+            check(acts["lolhelper:cmd:esports:0"]["type"] == 2 and acts["lolhelper:cmd:esports:0"]["data"] == "/lol 赛程"
+                  and acts["lolhelper:cmd:esports:4"]["enter"] is False and acts["lolhelper:menu:main"]["type"] == 1,
+                  "guide: QQ keyboards get command buttons")
+        else:
+            check(False, "guide: QQ adapter patched")
     txt = await plugin.llm_command_help(make_event("x"), "竞猜")
     check("/lol 竞猜" in txt, "guide: llm command help tool")
+
+    # access control: black / white lists, admin-only commands, /lol 名单, LLM tools
+    from_settings = mod.Settings if hasattr(mod, "Settings") else None
+    access_cls = type(plugin.settings.access)
+
+    async def as_user(text, sender="40004", admin=False, group=True):
+        ev = make_event(text, sender=sender, group=group)
+        if admin:
+            ev.role = "admin"
+        ev.message_obj.group_id = "g1" if group else ""
+        outs = [describe(r) async for r in mod.LolHelperPlugin.compat_entry(plugin, ev)]
+        return "\n".join(outs), ev
+
+    saved_access = plugin.settings.access
+    try:
+        plugin.settings.access = access_cls(black_users=["40004"])
+        out, ev = await as_user("/lol 状态")
+        check(out == "" and plugin._match_command(make_event("x", sender="40004"), "lol 状态") is None,
+              "access: blacklisted user gets no answer")
+        out, _ = await as_user("/lol 状态", admin=True)
+        check(f"v{mod.VERSION}" in out, "access: admins are never blocked")
+        plugin.settings.access = access_cls(whitelist=True, white_groups=["g9"], white_users=["50005"])
+        out_a, _ = await as_user("/lol 状态", sender="40004")
+        out_b, _ = await as_user("/lol 状态", sender="50005")
+        check(out_a == "" and f"v{mod.VERSION}" in out_b, "access: whitelist lets only listed users and groups in")
+        plugin.settings.access = access_cls(admin_commands=["状态"])
+        out, _ = await as_user("/lol 状态")
+        out_admin, _ = await as_user("/lol 状态", admin=True)
+        menu, _ = await as_user("/lol 帮助 设置")
+        check("仅限 AstrBot 管理员使用" in out and f"v{mod.VERSION}" in out_admin and "▸ 状态" not in menu,
+              "access: admin-only command explains itself and leaves the menu")
+        plugin.settings.access = access_cls(admin_only=True)
+        out, _ = await as_user("/lol 帮助")
+        txt = await plugin.llm_command_help(make_event("x", sender="40004"), "竞猜")
+        check(out == "" and "权限" in txt, "access: admin-only plugin ignores others, LLM tools too")
+        plugin.settings.access = access_cls()
+        md = find_handler(handlers, "lol 名单")
+        ev = make_event("lol 名单 拉黑 群g7 60006", sender="10001")
+        ev.role = "admin"
+        out = "".join([describe(r) async for r in md.handler(plugin, ev)])
+        ev = make_event("lol 名单 限管理员 tft 英雄 订阅 不存在", sender="10001")
+        out2 = "".join([describe(r) async for r in md.handler(plugin, ev)])
+        acc = plugin.settings.access
+        check("已拉黑" in out and acc.black_groups == ["g7"] and acc.black_users == ["60006"]
+              and acc.admin_commands == ["tft 英雄", "订阅"] and "没有找到：不存在" in out2
+              and plugin.config["access"]["blacklist_groups"] == ["g7"], "access: /lol 名单 edits and saves the lists")
+    finally:
+        plugin.settings.access = saved_access
 
     await plugin.terminate()
     await runner.cleanup()

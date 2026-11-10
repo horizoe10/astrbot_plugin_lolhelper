@@ -54,6 +54,8 @@
         "description": "支持 Markdown 的平台",
         "type": "list",
         "default": [
+          "qq_official",
+          "qq_official_webhook",
           "telegram",
           "discord",
           "lark",
@@ -63,7 +65,7 @@
           "mattermost",
           "webchat"
         ],
-        "hint": "不在列表中的平台会把 Markdown 降级为纯文本。QQ 官方机器人开通 Markdown 权限后可加入 qq_official"
+        "hint": "不在列表中的平台会把 Markdown 降级为纯文本。默认已包含 QQ 官方机器人（qq_official / qq_official_webhook）；机器人没有 Markdown 权限、消息发不出去时把它们删掉即可"
       },
       "button_platforms": {
         "description": "帮助菜单显示按钮的平台",
@@ -516,6 +518,54 @@
         "type": "int",
         "default": 60,
         "invisible": true
+      }
+    }
+  },
+  "access": {
+    "description": "访问控制",
+    "type": "object",
+    "items": {
+      "blacklist_users": {
+        "description": "黑名单用户",
+        "type": "list",
+        "default": [],
+        "hint": "填用户 ID（QQ 号或平台用户 ID）。名单里的人发指令机器人不回应。AstrBot 管理员不受访问控制限制。也可以在聊天里用 /lol 名单 拉黑 @群友"
+      },
+      "blacklist_groups": {
+        "description": "黑名单群",
+        "type": "list",
+        "default": [],
+        "hint": "填群号，也可以填会话 ID（unified_msg_origin）。名单里的群整个不响应。聊天里可用 /lol 名单 拉黑 本群"
+      },
+      "whitelist_enabled": {
+        "description": "启用白名单",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后只有白名单里的群和用户能用；私聊需要用户本人在白名单里。黑名单优先于白名单"
+      },
+      "whitelist_users": {
+        "description": "白名单用户",
+        "type": "list",
+        "default": [],
+        "hint": "白名单开启时，这些用户在任何群和私聊里都能用"
+      },
+      "whitelist_groups": {
+        "description": "白名单群",
+        "type": "list",
+        "default": [],
+        "hint": "白名单开启时，这些群里的所有人都能用。填群号或会话 ID"
+      },
+      "admin_only": {
+        "description": "整个插件仅限 AstrBot 管理员使用",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后只有 AstrBot 管理员能用，其他人发指令机器人不回应"
+      },
+      "admin_commands": {
+        "description": "仅限 AstrBot 管理员的指令",
+        "type": "list",
+        "default": [],
+        "hint": "填指令名，不带 /lol，例如 订阅、群播报、模式、猜英雄；云顶指令写 tft 英雄。普通用户使用时会提示仅限管理员，菜单里也不再显示"
       }
     }
   },

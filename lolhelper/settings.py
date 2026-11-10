@@ -6,7 +6,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-DEFAULT_MD_PLATFORMS = ["telegram", "discord", "lark", "kook", "dingtalk", "slack", "mattermost", "webchat"]
+DEFAULT_MD_PLATFORMS = ["qq_official", "qq_official_webhook", "telegram", "discord", "lark", "kook", "dingtalk", "slack",
+                        "mattermost", "webchat"]
+# the 2.0.0 default; configs still holding exactly this list are upgraded to the current default on load
+_OLD_MD_PLATFORMS = {"telegram", "discord", "lark", "kook", "dingtalk", "slack", "mattermost", "webchat"}
 # platforms whose AstrBot adapter turns portable callback buttons into real buttons (help menu categories)
 DEFAULT_BUTTON_PLATFORMS = ["qq_official", "qq_official_webhook", "telegram", "discord", "kook", "lark", "slack", "dingtalk", "webchat"]
 
@@ -39,6 +42,75 @@ def _json_map(text: str) -> dict[str, Any]:
         return data if isinstance(data, dict) else {}
     except json.JSONDecodeError:
         return _lines_to_map(text)
+
+
+def _ids(v) -> list[str]:
+    items = v if isinstance(v, list) else str(v or "").replace("，", ",").replace(",", " ").split()
+    out = []
+    for x in items:
+        x = str(x).strip()
+        if x and x not in out:
+            out.append(x)
+    return out
+
+
+def command_key(text: str) -> str:
+    """"/lol 订阅" -> "订阅", "/tft 英雄" -> "tft 英雄": how admin-only commands are written in the config."""
+    words = str(text or "").strip().lstrip("/／").split()
+    if len(words) >= 2 and words[0].lower() in ("lol", "tft", "云顶"):
+        return ("tft " if words[0].lower() != "lol" else "") + words[1]
+    return words[0] if words else ""
+
+
+@dataclass
+class Access:
+    """Who may use the plugin. AstrBot admins are never restricted."""
+    whitelist: bool = False
+    white_users: list[str] = field(default_factory=list)
+    white_groups: list[str] = field(default_factory=list)
+    black_users: list[str] = field(default_factory=list)
+    black_groups: list[str] = field(default_factory=list)
+    admin_only: bool = False  # the whole plugin
+    admin_commands: list[str] = field(default_factory=list)  # "订阅", "tft 英雄"
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Access":
+        d = d if isinstance(d, dict) else {}
+        cmds = []
+        for x in _ids(d.get("admin_commands")) if isinstance(d.get("admin_commands"), list) else \
+                [w for w in str(d.get("admin_commands") or "").replace("，", ",").split(",")]:
+            k = command_key(x)
+            if k and k not in cmds:
+                cmds.append(k)
+        return cls(whitelist=bool(d.get("whitelist_enabled", False)), white_users=_ids(d.get("whitelist_users")),
+                   white_groups=_ids(d.get("whitelist_groups")), black_users=_ids(d.get("blacklist_users")),
+                   black_groups=_ids(d.get("blacklist_groups")), admin_only=bool(d.get("admin_only", False)),
+                   admin_commands=cmds)
+
+    def to_dict(self) -> dict:
+        return {"blacklist_users": list(self.black_users), "blacklist_groups": list(self.black_groups),
+                "whitelist_enabled": self.whitelist, "whitelist_users": list(self.white_users),
+                "whitelist_groups": list(self.white_groups), "admin_only": self.admin_only,
+                "admin_commands": list(self.admin_commands)}
+
+    def active(self) -> bool:
+        return bool(self.whitelist or self.admin_only or self.black_users or self.black_groups or self.admin_commands)
+
+    def allows(self, user: str, group: str = "", umo: str = "") -> bool:
+        """Black and white lists; group entries may be a group ID or a whole session ID (unified_msg_origin)."""
+        if self.admin_only:
+            return False
+        places = {x for x in (group, umo) if x}
+        if user in self.black_users or places & set(self.black_groups):
+            return False
+        if self.whitelist:
+            return user in self.white_users or bool(places & set(self.white_groups))
+        return True
+
+    def locks(self, group: str, names) -> bool:
+        """Whether a command (any of its names / aliases) is admin-only."""
+        cmds = set(self.admin_commands)
+        return any(n in cmds or f"{group} {n}" in cmds for n in names)
 
 
 @dataclass
@@ -93,6 +165,7 @@ class Settings:
     meta_region: str = "global"
     meta_tier: str = "emerald_plus"
     show_tips: bool = True
+    access: Access = field(default_factory=Access)
     # push
     push_enabled: bool = True
     push_match_interval: float = 300
@@ -152,6 +225,8 @@ class Settings:
         s.default_mode = mode if mode in ("text", "markdown", "image") else "image"
         mdp = g(out, "markdown_platforms", s.markdown_platforms)
         s.markdown_platforms = [str(x).strip() for x in mdp if str(x).strip()] if isinstance(mdp, list) else s.markdown_platforms
+        if set(s.markdown_platforms) == _OLD_MD_PLATFORMS:
+            s.markdown_platforms = list(DEFAULT_MD_PLATFORMS)
         btp = g(out, "button_platforms", s.button_platforms)
         s.button_platforms = [str(x).strip() for x in btp if str(x).strip()] if isinstance(btp, list) else s.button_platforms
         s.text_max_rows = int(g(out, "text_max_rows", s.text_max_rows))
@@ -231,5 +306,6 @@ class Settings:
         s.group_quiz_seconds = max(20, min(int(g(gp, "quiz_seconds", s.group_quiz_seconds)), 300))
 
         s.champion_aliases = _lines_to_map(g(al, "champion_aliases", ""))
+        s.access = Access.from_dict(_group(conf, "access"))
         return s
 

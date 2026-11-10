@@ -1045,7 +1045,7 @@ kbd { font-family: inherit; font-size: 14px; font-weight: 800; color: var(--text
 </section>
 {% endfor %}
 {% if doc.tips %}<div class="tips"><span class="tl">试试</span>{% for t in doc.tips %}<span class="tip"><kbd>{{ t.cmd|e }}</kbd>{{ t.desc|e }}</span>{% endfor %}</div>{% endif %}
-<div class="footer{{ '' if doc.tips else ' solo' }}"><span>{{ doc.footer|e }}</span><span>联盟助手{% if doc.theme != 'tool' %} · 数据来源 {% if 'WeGame' in doc.footer %}WeGame{% elif doc.theme == 'cn' %}国服客户端{% else %}OP.GG{% endif %}{% endif %}</span></div>
+<div class="footer{{ '' if doc.tips else ' solo' }}"><span>{{ doc.footer|e }}</span><span>联盟星枢{% if doc.theme != 'tool' %} · 数据来源 {% if 'WeGame' in doc.footer %}WeGame{% elif doc.theme == 'cn' %}国服客户端{% else %}OP.GG{% endif %}{% endif %}</span></div>
 </body>
 </html>
 

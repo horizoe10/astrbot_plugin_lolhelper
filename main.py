@@ -1,8 +1,9 @@
-"""AstrBot 联盟助手 (lolhelper) — LoL / TFT data with text, Markdown and image output."""
+"""AstrBot 联盟星枢 (lolhelper) — LoL / TFT data with text, Markdown and image output."""
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import os
 import re
@@ -13,7 +14,7 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
-from .lolhelper import PLUGIN_NAME, VERSION
+from .lolhelper import DISPLAY_NAME, PLUGIN_NAME, SUBTITLE, VERSION
 from .lolhelper.args import MODE_WORDS, parse_args, parse_leagues, parse_target, pick_game_mode, pick_position
 from .lolhelper.opgg_web import pick_scope
 from .lolhelper.constants import (
@@ -26,8 +27,9 @@ from .lolhelper.constants import (
 from .lolhelper.errors import LolHelperError, UsageError
 from .lolhelper.facade import Facade
 from .lolhelper.push import SUB_TYPES, PushManager
+from .lolhelper import qqkb
 from .lolhelper.service import View
-from .lolhelper.settings import Settings
+from .lolhelper.settings import Settings, command_key
 from .lolhelper.service import league_label
 from .lolhelper.storage import account_label, sub_league_list
 from .lolhelper.ai import AiReviewer
@@ -69,6 +71,38 @@ def _on_button(fn):
     return _button_action()(fn) if callable(_button_action) else fn
 
 
+class _Access:
+    """Black / white lists and admin-only commands, checked before any of the plugin's message handlers runs.
+    A blocked user gets no answer; an admin-only command fails here and compat_entry explains why."""
+
+    def __init__(self, plugin, group: str = "lol", names: frozenset = frozenset()):
+        self.plugin, self.group, self.names = plugin, group, names
+
+    def filter(self, event, cfg) -> bool:
+        try:
+            if self.plugin._blocked(event):
+                return False
+            return not (self.names and self.plugin._admin_locked(event, self.group, self.names))
+        except Exception:
+            return True
+
+
+def _tool_guard(fn):
+    """LLM tools follow the same access rules as commands."""
+
+    @functools.wraps(fn)
+    async def guarded(self, event, *args, **kwargs):
+        if self._blocked(event):
+            return f"当前用户没有使用{DISPLAY_NAME}的权限。"
+        return await fn(self, event, *args, **kwargs)
+
+    return guarded
+
+
+OWN_WORDS = {"我", "自己", "me"}
+LAST_TARGET_SECS = 1800
+
+
 class _BareGroup:
     """Custom filter on the /lol and /tft groups: a bare "/lol" no longer matches the group (AstrBot would answer with
     its whole command tree), so compat_entry can show the help menu instead. Sub-commands are not affected."""
@@ -97,19 +131,71 @@ class LolHelperPlugin(Star):
         self.groups.ai_comment = self._group_ai
         self.push.hooks.append(self.groups.tick)
         self._menu_wait: dict[str, float] = {}  # "umo|sender" -> until when a bare number opens a menu category
+        self._input_wait: dict[str, tuple[float, str]] = {}
+        self._last_target: dict[str, tuple[float, dict]] = {}  # "umo|sender" -> (until, account last looked at)  # "umo|sender" -> (until, command waiting for its argument)
+        self._qq_event_cls = None
+        try:
+            from astrbot.core.platform.sources.qqofficial.qqofficial_message_event import QQOfficialMessageEvent
+
+            if qqkb.install(QQOfficialMessageEvent):
+                self._qq_event_cls = QQOfficialMessageEvent
+        except Exception as exc:  # no QQ adapter (botpy missing) or a different AstrBot layout
+            logger.debug(f"[lolhelper] QQ 指令按钮不可用：{exc}")
         self._cmd_cache: list[tuple[str, str, set]] | None = None
         for grp in (type(self).lol, type(self).tft):
             gf = getattr(grp, "parent_group", None)
             if gf is not None and hasattr(gf, "add_custom_filter") and not any(
                     isinstance(x, _BareGroup) for x in getattr(gf, "custom_filter_list", [])):
                 gf.add_custom_filter(_BareGroup(gf))
+        self._install_access()
+
+    def _install_access(self) -> None:
+        from astrbot.core.star.star_handler import star_handlers_registry
+
+        for h in star_handlers_registry:
+            if h.handler_module_path != self.__module__ or getattr(h.event_type, "name", "") != "AdapterMessageEvent":
+                continue
+            h.event_filters[:] = [f for f in h.event_filters if type(f).__name__ != "_Access"]
+            names: set[str] = set()
+            group = "lol"
+            for f in h.event_filters:
+                if type(f).__name__ == "CommandFilter":
+                    names = {f.command_name, *(getattr(f, "alias", None) or ())}
+                    parents = " ".join(str(x) for x in (getattr(f, "parent_command_names", None) or []))
+                    group = "tft" if re.search(r"(^|\s)(tft|云顶)(\s|$)", parents) else "lol"
+            h.event_filters.append(_Access(self, group, frozenset(names)))
+
+    @staticmethod
+    def _is_admin(event: AstrMessageEvent) -> bool:
+        try:
+            return bool(event.is_admin())
+        except Exception:
+            return False
+
+    def _blocked(self, event: AstrMessageEvent) -> bool:
+        acc = self.settings.access
+        if not acc.active() or self._is_admin(event):
+            return False
+        return not acc.allows(str(event.get_sender_id() or ""), str(event.get_group_id() or ""),
+                              str(event.unified_msg_origin or ""))
+
+    def _admin_locked(self, event: AstrMessageEvent, group: str, names) -> bool:
+        acc = self.settings.access
+        return bool(acc.admin_commands) and acc.locks(group, names) and not self._is_admin(event)
+
+    def _unavailable(self, event: AstrMessageEvent, group: str, name: str) -> str:
+        if self._admin_locked(event, group, {name}):
+            return f"/{group} {name} 仅限 AstrBot 管理员使用"
+        return f"/{group} {name} 当前不可用（可能被管理员关闭，或需要管理员权限）"
 
     async def initialize(self) -> None:
         await self.f.start()
         self.push.start()
-        logger.info(f"[lolhelper] 联盟助手 v{VERSION} 已加载")
+        logger.info(f"[lolhelper] {DISPLAY_NAME} v{VERSION} 已加载")
 
     async def terminate(self) -> None:
+        if self._qq_event_cls is not None:
+            qqkb.uninstall(self._qq_event_cls)
         await self.push.stop()
         await self.f.close()
 
@@ -128,9 +214,13 @@ class LolHelperPlugin(Star):
 
     @staticmethod
     def _mentioned(event: AstrMessageEvent) -> str | None:
+        """The user someone @-ed besides the bot. Private chats have nobody else to @; QQ official bots also put a
+        placeholder At("qq_official") into private and channel messages whose id differs from self_id."""
+        if event.is_private_chat():
+            return None
         self_id = str(getattr(event.message_obj, "self_id", "") or "")
         for comp in event.message_obj.message or []:
-            if isinstance(comp, Comp.At) and str(comp.qq) not in (self_id, "all"):
+            if isinstance(comp, Comp.At) and str(comp.qq) not in (self_id, "all", "qq_official", "unknown_selfid"):
                 return str(comp.qq)
         return None
 
@@ -143,6 +233,7 @@ class LolHelperPlugin(Star):
 
     async def _reply(self, event: AstrMessageEvent, view: View, mode: str | None = None):
         umo = event.unified_msg_origin
+        mode = event.get_extra("lolhelper_mode") or mode
         mode = self.f.resolve_mode(mode, umo, event.get_platform_name())
         if mode == "image":
             try:
@@ -196,17 +287,32 @@ class LolHelperPlugin(Star):
         chain.use_t2i(False)
         await self.context.send_message(umo, chain)
 
-    async def _account_for(self, event: AstrMessageEvent, words: list[str]) -> dict:
+    async def _account_for(self, event: AstrMessageEvent, words: list[str], follow: bool = False) -> dict:
+        """The account a query is about: a written Riot ID, an @-ed member's binding or the asker's own.
+        follow: "/lol 对局 3" without a name means the player whose matches this person looked at last (within
+        LAST_TARGET_SECS), so the numbers on that card keep working; "我" / "自己" asks for the own account."""
+        key = self._menu_key(event)
+        own = [w for w in words if w in OWN_WORDS]
+        words = [w for w in words if w not in OWN_WORDS]
         if any("#" in w or "＃" in w for w in words):
-            return await self.f.account_from_target(parse_target(words, self.settings.cn_servers_extra))
-        mention = self._mentioned(event)
-        user = self._user_key(event, mention)
-        acc = self.f.store.default_account(user)
-        if acc:
-            self._group_touch(event, user if mention else None)
-        if not acc:
-            who = "对方" if mention else "你"
-            raise UsageError(f"{who}还没有绑定账号。用法：/lol 绑定 名字#标签 [大区]，或直接 /lol 战绩 名字#标签 大区")
+            acc = await self.f.account_from_target(parse_target(words, self.settings.cn_servers_extra))
+        else:
+            mention = self._mentioned(event)
+            until, last = self._last_target.get(key, (0.0, None))
+            if follow and not own and not mention and last and time.time() < until:
+                acc = last
+            else:
+                user = self._user_key(event, mention)
+                acc = self.f.store.default_account(user)
+                if acc:
+                    self._group_touch(event, user if mention else None)
+                if not acc:
+                    who = "对方" if mention else "你"
+                    raise UsageError(f"{who}还没有绑定账号。用法：/lol 绑定 名字#标签 [大区]，或直接 /lol 战绩 名字#标签 大区")
+        now = time.time()
+        if len(self._last_target) > 500:
+            self._last_target = {k: v for k, v in self._last_target.items() if v[0] > now}
+        self._last_target[key] = (now + LAST_TARGET_SECS, acc)
         return acc
 
     # ================================================================ guide
@@ -218,7 +324,8 @@ class LolHelperPlugin(Star):
         except Exception:
             admin = False
         return guide.Ctx(version=VERSION, account=account_label(acc) if acc else "", in_group=not event.is_private_chat(),
-                         ai=s.ai_enabled, group_play=s.group_enabled, cn=s.cn_enabled, admin=admin, push=s.push_enabled)
+                         ai=s.ai_enabled, group_play=s.group_enabled, cn=s.cn_enabled, admin=admin, push=s.push_enabled,
+                         buttons=self._buttons_ok(event), hidden=set() if admin else set(s.access.admin_commands))
 
     def _usage(self, event: AstrMessageEvent, name: str, group: str = "lol", extra: str = ""):
         return self._plain(event, guide.usage_text(name, group, extra))
@@ -260,31 +367,47 @@ class LolHelperPlugin(Star):
         return (hasattr(Comp, "ActionRow") and hasattr(Comp, "Button") and callable(_button_action)
                 and event.get_platform_name() in self.settings.button_platforms)
 
-    def _button_rows(self, ctx: guide.Ctx, current: str | None) -> list:
-        rows = []
-        for row in guide.button_rows(ctx, current):
-            rows.append(Comp.ActionRow(buttons=[
-                Comp.Button(id=f"lolhelper:menu:{key}", label=label, action=Comp.Button.CallbackAction(data={"k": key}),
-                            style=Comp.Button.Style.PRIMARY if key == "main" else Comp.Button.Style.DEFAULT)
-                for key, label in row]))
-        if rows:
-            rows[0].fallback_text = "回复序号或发送 /lol 帮助 <序号> 查看分类"
-        return rows
+    def _button_rows(self, rows: list[list[guide.Btn]]) -> list:
+        out = []
+        for row in rows:
+            out.append(Comp.ActionRow(buttons=[
+                Comp.Button(id=b.id, label=b.label, action=Comp.Button.CallbackAction(data=b.data),
+                            style=Comp.Button.Style.PRIMARY if b.primary else Comp.Button.Style.DEFAULT)
+                for b in row]))
+        if out:
+            out[0].fallback_text = "回复序号或发送 /lol 帮助 <序号> 查看分类"
+        return out
 
-    async def _menu_out(self, event: AstrMessageEvent, text: str, ctx: guide.Ctx, current: str | None = None):
-        """A menu message: remembers the asker for number replies and adds category buttons where supported.
-        Returns the result to yield, or None when it was already sent with buttons."""
+    def _md_ok(self, event: AstrMessageEvent) -> bool:
+        return event.get_platform_name() in self.settings.markdown_platforms
+
+    async def _menu_out(self, event: AstrMessageEvent, text: str, md: str | None = None,
+                        rows: list[list[guide.Btn]] | None = None):
+        """A menu message: remembers the asker for number replies, uses the Markdown version where Markdown renders
+        and adds buttons where supported. Returns the result to yield, or None when it was already sent with buttons."""
         now = time.time()
         if len(self._menu_wait) > 200:
             self._menu_wait = {k: v for k, v in self._menu_wait.items() if v > now}
         self._menu_wait[self._menu_key(event)] = now + guide.REPLY_SECS
-        if self._buttons_ok(event):
+        use_md = bool(md) and self._md_ok(event)
+        body = (md if use_md else text).strip()
+        if rows and self._buttons_ok(event):
             try:
-                await event.send(MessageChain(chain=[Comp.Plain(text), *self._button_rows(ctx, current)]))
+                chain = MessageChain(chain=[Comp.Plain(body), *self._button_rows(rows)])
+                await event.send(_as_markdown(chain) if use_md else chain)
                 return None
             except Exception as exc:
                 logger.warning(f"[lolhelper] 发送按钮菜单失败，改发纯文本：{exc}")
-        return self._plain(event, text)
+        res = self._plain(event, body)
+        return _as_markdown(res) if use_md else res
+
+    async def _main_menu(self, event: AstrMessageEvent, ctx: guide.Ctx, bare: bool = False):
+        return await self._menu_out(event, guide.main_menu(ctx, bare), guide.main_menu_md(ctx, bare),
+                                    guide.main_buttons(ctx))
+
+    async def _cat_menu(self, event: AstrMessageEvent, ctx: guide.Ctx, cat: guide.Cat):
+        return await self._menu_out(event, guide.category_text(cat, ctx), guide.category_md(cat, ctx),
+                                    guide.category_buttons(cat, ctx))
 
     async def _help(self, event: AstrMessageEvent, arg: str, mode: str | None = None, bare: bool = False, group: str = "lol"):
         ctx = self._guide_ctx(event)
@@ -297,30 +420,69 @@ class LolHelperPlugin(Star):
         if mode in ("image", "markdown") and res[0] in ("main", "all"):
             return await self._reply(event, View("help_menu", {}, guide.menu_doc(ctx), time.time()), mode)
         if res[0] == "main":
-            return await self._menu_out(event, guide.main_menu(ctx, bare), ctx)
+            return await self._main_menu(event, ctx, bare)
         if res[0] == "all":
             return self._plain(event, guide.full_text(ctx))
         if res[0] == "cat":
-            return await self._menu_out(event, guide.category_text(res[1], ctx), ctx, res[1].key)
+            return await self._cat_menu(event, ctx, res[1])
         return self._plain(event, guide.command_text(res[1], res[2], ctx, self._aliases(res[2])))
 
     @_on_button
     async def menu_button(self, event: AstrMessageEvent):
-        """帮助菜单的分类按钮"""
+        """帮助菜单的按钮：切换分类、打开选项、直接查看卡片"""
         it = event.get_button_interaction() if hasattr(event, "get_button_interaction") else None
         action = str(getattr(it, "action_id", "") or "")
-        if not action.startswith("lolhelper:menu:"):
+        if not action.startswith("lolhelper:") or self._blocked(event):
             return
-        key = action.rsplit(":", 1)[-1]
+        data = getattr(it, "data", None)
+        data = data if isinstance(data, dict) else {}
+        kind, key = action.split(":")[1], action.rsplit(":", 1)[-1]
         ctx = self._guide_ctx(event)
-        cat = next((c for c in guide.CATEGORIES if c.key == key), None)
-        if cat is None:
-            r = await self._menu_out(event, guide.main_menu(ctx), ctx)
+        r = None
+        if kind == "cmd":
+            async for x in self._button_cmd(event, str(data.get("c") or ""), bool(data.get("e", True)), str(data.get("a") or ""),
+                                            str(data.get("x") or "")):
+                yield x
+            event.stop_event()
+            return
+        if kind == "opt" and str(data.get("o") or key) in guide.OPTIONS:
+            o = str(data.get("o") or key)
+            r = await self._menu_out(event, guide.option_text(o, ctx.buttons), guide.option_md(o, ctx.buttons), guide.option_buttons(o))
         else:
-            r = await self._menu_out(event, guide.category_text(cat, ctx), ctx, cat.key)
+            key = str(data.get("k") or key)
+            cat = next((c for c in guide.CATEGORIES if c.key == key), None)
+            r = await (self._cat_menu(event, ctx, cat) if cat else self._main_menu(event, ctx))
         if r is not None:
             yield r
         event.stop_event()
+
+    async def _button_cmd(self, event: AstrMessageEvent, cmd: str, enter: bool, ask: str, ex: str = ""):
+        """A card button clicked as a callback: run the command, or wait for the argument it still needs."""
+        if not cmd:
+            return
+        if not enter:
+            now = time.time()
+            if len(self._input_wait) > 200:
+                self._input_wait = {k: v for k, v in self._input_wait.items() if v[0] > now}
+            self._input_wait[self._menu_key(event)] = (now + guide.REPLY_SECS, cmd.strip())
+            yield self._plain(event, guide.ask_text(cmd, ask, ex))
+            return
+        if event.get_platform_name() in ("qq_official", "qq_official_webhook"):
+            # QQ drops images in replies to a button click; normally these are command buttons and never get here
+            event.set_extra("lolhelper_mode", "markdown" if self._md_ok(event) else "text")
+        async for r in self._run_body(event, cmd.lstrip("/／").strip()):
+            yield r
+
+    async def _run_body(self, event: AstrMessageEvent, body: str):
+        handler = self._match_command(event, body)
+        if handler is None:
+            words = body.split()
+            group = "tft" if words and words[0].lower() in ("tft", "云顶") else "lol"
+            name = self._command_words(group).get(words[1], words[1]) if len(words) > 1 else group
+            yield self._plain(event, self._unavailable(event, group, name))
+            return
+        async for r in self._run_handler(event, handler, body):
+            yield r
 
     # ================================================================== /lol
     @filter.command_group("lol")
@@ -420,7 +582,7 @@ class LolHelperPlugin(Star):
             index = int(words.pop())
 
         async def make():
-            acc = await self._account_for(event, words)
+            acc = await self._account_for(event, words, follow=True)
             return await self.f.game_detail(acc, index)
 
         yield await self._answer(event, make, a.mode)
@@ -493,7 +655,7 @@ class LolHelperPlugin(Star):
         yield self._plain(event, f"🤖 正在用「{style}」风格点评第 {index} 局，稍等几秒…")
 
         async def make():
-            acc = await self._account_for(event, words)
+            acc = await self._account_for(event, words, follow=True)
             key, brief, game = await self.f.ai_game_brief(acc, index)
             out = await self.ai.review("game", key, brief, style, event.unified_msg_origin, self._ai_gate(self._user_key(event)))
             from .lolhelper.game import build_game_view
@@ -1163,6 +1325,7 @@ class LolHelperPlugin(Star):
     @lol.command("绑定", alias={"bind"})
     async def lol_bind(self, event: AstrMessageEvent):
         """绑定账号：/lol 绑定 名字#标签 [大区]"""
+        self._last_target.pop(self._menu_key(event), None)  # the own default account changes
         a = parse_args(self._rest(event, {"绑定", "bind"}))
         if not a.words:
             yield self._usage(event, "绑定", extra="国服请用：/lol 绑定国服 名字#编号 [大区]")
@@ -1172,6 +1335,7 @@ class LolHelperPlugin(Star):
     @lol.command("绑定国服", alias={"bindcn", "国服绑定"})
     async def lol_bind_cn(self, event: AstrMessageEvent):
         """绑定国服账号：/lol 绑定国服 名字#编号 [大区]"""
+        self._last_target.pop(self._menu_key(event), None)  # the own default account changes
         a = parse_args(self._rest(event, {"绑定国服", "bindcn", "国服绑定"}))
         if not a.words:
             names = "、".join(v[0] for v in CN_SERVERS.values())
@@ -1201,6 +1365,7 @@ class LolHelperPlugin(Star):
     @lol.command("切换", alias={"switch", "默认"})
     async def lol_switch(self, event: AstrMessageEvent):
         """切换默认账号：/lol 切换 2"""
+        self._last_target.pop(self._menu_key(event), None)  # the own default account changes
         a = parse_args(self._rest(event, {"切换", "switch", "默认"}))
         if not a.rest.isdigit():
             yield self._usage(event, "切换")
@@ -1211,6 +1376,7 @@ class LolHelperPlugin(Star):
     @lol.command("解绑", alias={"unbind"})
     async def lol_unbind(self, event: AstrMessageEvent):
         """解绑账号：/lol 解绑 [序号]，不填则全部解绑"""
+        self._last_target.pop(self._menu_key(event), None)  # the own default account changes
         a = parse_args(self._rest(event, {"解绑", "unbind"}))
         idx = int(a.rest) - 1 if a.rest.isdigit() else None
         removed = await self.f.store.unbind(self._user_key(event), idx)
@@ -1256,6 +1422,116 @@ class LolHelperPlugin(Star):
         """检查国服客户端连接"""
         a = parse_args(self._rest(event, {"国服状态", "cn", "代理状态"}))
         yield await self._answer(event, self.f.cn_status, a.mode or "text")
+
+    # ============================================================ access
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @lol.command("名单", alias={"acl", "权限", "访问控制"})
+    async def lol_acl(self, event: AstrMessageEvent):
+        """访问控制（管理员）：/lol 名单 [拉黑|解除|允许|移出 <@群友|用户ID|本群|群号>] [白名单 开|关] [限管理员 <指令>|全部 开|关]"""
+        words = self._rest(event, {"名单", "acl", "权限", "访问控制"}).split()
+        acc = self.settings.access
+        if not words:
+            yield self._plain(event, self._acl_text())
+            return
+        op, args = words[0], words[1:]
+        lists = {"拉黑": (acc.black_users, acc.black_groups, True), "解除": (acc.black_users, acc.black_groups, False),
+                 "允许": (acc.white_users, acc.white_groups, True), "移出": (acc.white_users, acc.white_groups, False)}
+        on_words, off_words = {"开", "开启", "on", "1"}, {"关", "关闭", "off", "0"}
+        if op in lists:
+            users, groups, add = lists[op]
+            targets = self._acl_targets(event, args)
+            if not targets:
+                yield self._usage(event, "名单", extra="要写目标：@群友、用户 ID、本群，或 群123456")
+                return
+            for kind, ident in targets:
+                bucket = groups if kind == "group" else users
+                if add and ident not in bucket:
+                    bucket.append(ident)
+                elif not add and ident in bucket:
+                    bucket.remove(ident)
+            done = "、".join(("群 " if k == "group" else "") + i for k, i in targets)
+            head = f"✅ 已{op}：{done}"
+        elif op == "白名单" and args and args[0] in on_words | off_words:
+            acc.whitelist = args[0] in on_words
+            head = "✅ 白名单已" + ("开启：只有白名单里的群和用户能用" if acc.whitelist else "关闭")
+        elif op in ("限管理员", "仅管理员", "管理员") and args:
+            if args[0] == "全部":
+                acc.admin_only = not (len(args) > 1 and args[1] in off_words)
+                head = "✅ 整个插件" + ("现在仅限 AstrBot 管理员使用" if acc.admin_only else "已对所有人开放")
+            else:
+                changed, bad, i = [], [], 0
+                while i < len(args):
+                    group, word = "lol", args[i]
+                    if word.lower() in ("tft", "云顶") and i + 1 < len(args):
+                        group, word = "tft", args[i + 1]
+                        i += 1
+                    i += 1
+                    name = self._command_words(group).get(word.lstrip("/"))
+                    if not name:
+                        bad.append(word)
+                        continue
+                    key = name if group == "lol" else f"tft {name}"
+                    if key in acc.admin_commands:
+                        acc.admin_commands.remove(key)
+                        changed.append(f"{key}（取消）")
+                    else:
+                        acc.admin_commands.append(key)
+                        changed.append(key)
+                if not changed:
+                    yield self._plain(event, f"没有找到指令：{'、'.join(bad) or '（空）'}。写指令名，例如 /lol 名单 限管理员 订阅")
+                    return
+                head = "✅ 仅限管理员：" + "、".join(changed) + (f"\n没有找到：{'、'.join(bad)}" if bad else "")
+        else:
+            yield self._usage(event, "名单")
+            return
+        self._acl_save()
+        yield self._plain(event, head + "\n" + self._acl_text())
+
+    def _acl_targets(self, event: AstrMessageEvent, args: list[str]) -> list[tuple[str, str]]:
+        """("user" | "group", id) for @-ed members, 本群, 群123456 and bare user IDs."""
+        out: list[tuple[str, str]] = []
+        self_id = str(getattr(event.message_obj, "self_id", "") or "")
+        for comp in event.message_obj.message or []:
+            if isinstance(comp, Comp.At) and str(comp.qq) not in (self_id, "all", "qq_official", "unknown_selfid"):
+                out.append(("user", str(comp.qq)))
+        for w in args:
+            if w.startswith("@"):
+                continue
+            if w in ("本群", "这个群", "此群"):
+                gid = str(event.get_group_id() or "")
+                if gid:
+                    out.append(("group", gid))
+            elif w.startswith("群") and len(w) > 1:
+                out.append(("group", w[1:].lstrip(":：")))
+            else:
+                out.append(("user", w))
+        return list(dict.fromkeys(out))
+
+    def _acl_save(self) -> None:
+        try:
+            cur = self.config.get("access") if hasattr(self.config, "get") else None
+            self.config["access"] = {**(cur if isinstance(cur, dict) else {}), **self.settings.access.to_dict()}
+            save = getattr(self.config, "save_config", None)
+            if callable(save):
+                save()
+        except Exception as exc:
+            logger.warning(f"[lolhelper] 保存访问控制设置失败：{exc}")
+
+    def _acl_text(self) -> str:
+        acc = self.settings.access
+
+        def ls(xs):
+            return "、".join(xs) if xs else "无"
+
+        lines = ["🔐 访问控制", guide.RULE,
+                 f"黑名单用户：{ls(acc.black_users)}", f"黑名单群：{ls(acc.black_groups)}",
+                 f"白名单：{'开启' if acc.whitelist else '关闭'}"]
+        if acc.whitelist or acc.white_users or acc.white_groups:
+            lines += [f"白名单用户：{ls(acc.white_users)}", f"白名单群：{ls(acc.white_groups)}"]
+        lines += [f"仅管理员指令：{ls(acc.admin_commands)}", f"整个插件仅管理员：{'是' if acc.admin_only else '否'}",
+                  guide.RULE, "/lol 名单 拉黑｜解除 @群友", "/lol 名单 允许｜移出 本群", "/lol 名单 白名单 开｜关",
+                  "/lol 名单 限管理员 订阅", "/lol 名单 限管理员 全部 开｜关", "群号写成 群123456；管理员不受限"]
+        return "\n".join(lines)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @lol.command("WeGame登录", alias={"wegame登录", "扫码登录", "wglogin"})
@@ -1571,7 +1847,8 @@ class LolHelperPlugin(Star):
         """插件运行状态"""
         s = self.settings
         lines = [
-            f"联盟助手 v{VERSION}",
+            f"{DISPLAY_NAME} v{VERSION}",
+            SUBTITLE,
             f"OP.GG MCP：{len(self.f.mcp.tools)} 个工具" + ("" if self.f.mcp.tools else "（尚未连接）"),
             f"Data Dragon：{self.f.gd.version or '未加载'}",
             f"默认输出：{MODE_ZH[s.default_mode]}　本会话：{MODE_ZH.get(self.f.store.mode(event.unified_msg_origin) or '', '跟随默认')}",
@@ -1585,7 +1862,22 @@ class LolHelperPlugin(Star):
     async def compat_entry(self, event: AstrMessageEvent):
         """兼容入口：唤醒前缀为空（如 QQ 官方机器人）时也能识别 /lol、／lol 以及不 @ 的「lol 子指令」；
         另外处理单发 /lol（帮助菜单）、菜单的序号回复、/lol 亚索 这类直接查询和打错的指令"""
+        if self._blocked(event):  # also a handler filter; checked here so direct calls follow the same rules
+            return
         text = (event.get_message_str() or "").strip()
+        if self._input_wait and not event.get_extra("lolhelper_handled"):
+            key = self._menu_key(event)
+            until, cmd = self._input_wait.get(key, (0.0, ""))
+            first = text.lstrip("/／").split()[:1]
+            if cmd and (time.time() > until or text[:1] in ("/", "／") or (first and first[0].lower() in ENTRY_WORDS)):
+                self._input_wait.pop(key, None)  # expired, or a new command replaces the pending one
+            elif cmd and (text or self._mentioned(event)):
+                self._input_wait.pop(key, None)
+                event.set_extra("lolhelper_handled", True)
+                async for r in self._run_body(event, f"{cmd.lstrip('/／').strip()} {text}".strip()):
+                    yield r
+                event.stop_event()
+                return
         if self._menu_wait and len(text) <= 3 and (text.isdigit() or text in guide.BACK_WORDS):
             until = self._menu_wait.get(self._menu_key(event), 0)
             if time.time() < until:
@@ -1594,9 +1886,9 @@ class LolHelperPlugin(Star):
                 if res and res[0] in ("main", "cat"):
                     event.set_extra("lolhelper_handled", True)
                     if res[0] == "main":
-                        r = await self._menu_out(event, guide.main_menu(ctx), ctx)
+                        r = await self._main_menu(event, ctx)
                     else:
-                        r = await self._menu_out(event, guide.category_text(res[1], ctx), ctx, res[1].key)
+                        r = await self._cat_menu(event, ctx, res[1])
                     if r is not None:
                         yield r
                     event.stop_event()
@@ -1638,20 +1930,20 @@ class LolHelperPlugin(Star):
         a = parse_args(" ".join(words[1:]))
         flags = [w for w in words[1:] if w not in a.words]
         ctx = self._guide_ctx(event)
+        note = ""
         if not a.words:
             if group == "lol" and self._mentioned(event):
                 body = " ".join(["lol", "战绩", *flags])
             else:
                 cat = next(c for c in guide.CATEGORIES if c.key == "tft") if group == "tft" else None
-                r = await (self._menu_out(event, guide.category_text(cat, ctx), ctx, cat.key) if cat
-                           else self._menu_out(event, guide.main_menu(ctx, bare=True), ctx))
+                r = await (self._cat_menu(event, ctx, cat) if cat else self._main_menu(event, ctx, bare=True))
                 if r is not None:
                     yield r
                 return
         else:
             known = self._command_words(group)
             if a.words[0] in known:  # a real command that is switched off in the WebUI or needs a permission
-                yield self._plain(event, f"/{group} {known[a.words[0]]} 当前不可用（可能被管理员关闭，或需要管理员权限）")
+                yield self._plain(event, self._unavailable(event, group, known[a.words[0]]))
                 return
             hits = guide.suggest(a.words[0], known)
             guess, note = None, ""
@@ -1753,6 +2045,7 @@ class LolHelperPlugin(Star):
 
     # ============================================================ LLM tools
     @filter.llm_tool(name="lolhelper_champion_build")
+    @_tool_guard
     async def llm_champion(self, event: AstrMessageEvent, champion: str, position: str = "") -> str:
         """查询英雄联盟英雄在当前版本的出装、符文、技能加点和克制关系（数据来自 OP.GG）。
 
@@ -1767,6 +2060,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_summoner")
+    @_tool_guard
     async def llm_summoner(self, event: AstrMessageEvent, riot_id: str, region: str = "") -> str:
         """查询英雄联盟召唤师的段位和最近对局。外服通过 OP.GG，国服需要大区名（如 艾欧尼亚）。
 
@@ -1782,6 +2076,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_tier_list")
+    @_tool_guard
     async def llm_tier(self, event: AstrMessageEvent, position: str = "") -> str:
         """查询英雄联盟当前版本各位置的强势英雄梯队（OP.GG 单双排数据）。
 
@@ -1795,6 +2090,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_tft_meta")
+    @_tool_guard
     async def llm_tft(self, event: AstrMessageEvent, limit: int = 8) -> str:
         """查询云顶之弈当前版本的强势阵容（OP.GG 数据），包含均名、前四率和核心棋子。
 
@@ -1807,6 +2103,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_esports")
+    @_tool_guard
     async def llm_esports(self, event: AstrMessageEvent, mode: str = "schedule", league: str = "") -> str:
         """查询英雄联盟电竞赛程或赛果。
 
@@ -1821,8 +2118,9 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_command_help")
+    @_tool_guard
     async def llm_command_help(self, event: AstrMessageEvent, topic: str = "") -> str:
-        """查询联盟助手（英雄联盟 / 云顶之弈机器人插件）的指令用法。用户问机器人怎么用、有哪些指令、某个功能用什么指令时调用，并把返回的指令原样告诉用户。
+        """查询联盟星枢（英雄联盟 / 云顶之弈机器人插件）的指令用法。用户问机器人怎么用、有哪些指令、某个功能用什么指令时调用，并把返回的指令原样告诉用户。
 
         Args:
             topic(string): 想了解的分类或指令，例如 赛事、竞猜、点评、订阅；留空返回全部指令
@@ -1836,6 +2134,7 @@ class LolHelperPlugin(Star):
         return guide.command_text(res[1], res[2], ctx, self._aliases(res[2]))
 
     @filter.llm_tool(name="lolhelper_standings")
+    @_tool_guard
     async def llm_standings(self, event: AstrMessageEvent, league: str) -> str:
         """查询英雄联盟职业联赛的积分榜（大场、小场、积分）。
 
@@ -1848,6 +2147,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_esports_match")
+    @_tool_guard
     async def llm_esports_match(self, event: AstrMessageEvent, team: str = "", game: int = 0) -> str:
         """查询一场英雄联盟职业比赛的详细数据：每局阵容、击杀、资源和 MVP；指定局号时返回该局双方 10 名选手的数据。
 
@@ -1861,6 +2161,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_recent_form")
+    @_tool_guard
     async def llm_recent_form(self, event: AstrMessageEvent, riot_id: str = "", region: str = "", count: int = 10) -> str:
         """查询召唤师近期战绩的统计：胜率、KDA、参团率、伤害 / 经济 / 死亡占比、常用英雄和位置，以及最近 5 局与整体的对比。适合回答“某人最近打得怎么样”。
 
@@ -1883,6 +2184,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_tft_lookup")
+    @_tool_guard
     async def llm_tft_lookup(self, event: AstrMessageEvent, kind: str, name: str) -> str:
         """查询云顶之弈的英雄出装、某件装备适合哪些英雄，或搜索强化符文。
 
@@ -1899,6 +2201,7 @@ class LolHelperPlugin(Star):
             return f"查询失败：{exc}"
 
     @filter.llm_tool(name="lolhelper_group_ranking")
+    @_tool_guard
     async def llm_group_ranking(self, event: AstrMessageEvent, period: str = "day") -> str:
         """查询当前群的群友英雄联盟排行榜：胜场、胜率、KDA、评分和称号。只能在群聊中使用。
 

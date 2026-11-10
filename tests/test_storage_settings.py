@@ -19,7 +19,7 @@ def test_settings_from_schema_defaults():
     assert s.cn_bridge_url == ""  # built-in: talk to the client on this machine
     assert s.push_esports_game_data and s.esports_default_leagues == []
     assert s.ttl_meta == 180 * 60 and s.push_match_interval == 300
-    assert "telegram" in s.markdown_platforms
+    assert "telegram" in s.markdown_platforms and "qq_official" in s.markdown_platforms
 
 
 def test_settings_cn_and_esports_migration():
@@ -68,3 +68,18 @@ def test_bindings_and_subs(tmp_path):
 
     asyncio.run(run())
 
+
+
+def test_access_rules():
+    from lolhelper.settings import Access, Settings
+
+    a = Settings.from_config({"access": {"blacklist_users": ["1"], "blacklist_groups": "g1, g2",
+                                         "admin_commands": ["/lol 订阅", "tft 英雄", "模式", "模式"]}}).access
+    assert a.black_groups == ["g1", "g2"] and a.admin_commands == ["订阅", "tft 英雄", "模式"]
+    assert not a.allows("1") and not a.allows("2", "g1") and a.allows("2", "g3") and not a.allows("2", "", "g2")
+    a.whitelist, a.white_groups, a.white_users = True, ["g3"], ["9"]
+    assert a.allows("2", "g3") and not a.allows("2", "g4") and a.allows("9") and not a.allows("2")
+    assert not a.allows("1", "g3")  # the blacklist wins
+    assert a.locks("tft", {"英雄"}) and not a.locks("lol", {"英雄"}) and a.locks("lol", {"订阅", "sub"})
+    assert Access.from_dict(a.to_dict()) == a
+    assert not Access().active() and Access(admin_only=True).active() and not Access(admin_only=True).allows("1")
